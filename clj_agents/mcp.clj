@@ -45,6 +45,7 @@
           :handler (fn [args]
                      (let [parsed-args (json/parse-string args true)]
                        (call-tool server (:name t) parsed-args)))
-          :schema {:name prefixed-name
-                   :description (:description t)
-                   :parameters (:inputSchema t)}})))))
+          :schema {:type "function"
+                   :function {:name prefixed-name
+                              :description (:description t)
+                              :parameters (:inputSchema t)}})))))

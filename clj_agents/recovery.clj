@@ -13,17 +13,23 @@
       (and (= status-code 400) (str/includes? msg "context"))
       {:reason :context-overflow :retryable true :should-compress true :should-fallback false}
       
-      (contains? #{500 502 503} status-code)
+      (or (contains? #{500 502 503} status-code)
+          (str/includes? msg "closed")
+          (str/includes? msg "reset")
+          (str/includes? msg "timeout"))
       {:reason :server-error :retryable true :should-compress false :should-fallback false}
       
       (contains? #{401 403} status-code)
       {:reason :auth :retryable false :should-compress false :should-fallback true}
       
+      (= status-code 402)
+      {:reason :payment-required :retryable false :should-compress false :should-fallback true}
+      
       (= status-code 404)
       {:reason :model-not-found :retryable false :should-compress false :should-fallback true}
       
       :else
-      {:reason :unknown :retryable false :should-compress false :should-fallback false})))
+      {:reason :unknown :retryable (>= status-code 500) :should-compress false :should-fallback false})))
 
 (defn jittered-backoff [attempt]
   (let [base-delay 2000 ;; 2 seconds

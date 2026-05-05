@@ -9,108 +9,112 @@
             [recovery]
             [memory]
             [skill]
-            [hooks])
+            [hooks]
+            [reviewer]
+            [llm])
   (:import [java.util.concurrent Executors]))
 
 (def ^:dynamic *turns-since-memory* (atom 0))
 (def ^:dynamic *iters-since-skill* (atom 0))
-(def ^:dynamic *memory-nudge-threshold* 3) ;; Low for demo
+(def ^:dynamic *memory-nudge-threshold* 3)
 (def ^:dynamic *skill-nudge-threshold* 3)
 
 (defn- spawn-background-review! [messages review-memory review-skills]
-  (let [prompt (cond (and review-memory review-skills) "Review for memory and skills."
-                     review-memory "Review this conversation for memories to save."
-                     :else "Review this conversation for new skills.")]
-    (println "\n[SYSTEM] Spawning background review thread...")
-    (future
-      (try
-        (binding [*memory-nudge-threshold* 0 ;; Cascade protection
-                  *skill-nudge-threshold* 0]
-          (let [agent-state (atom {:cached-prompt nil})]
-            (println (str "[BG-REVIEW] Starting: " prompt))
-            ;; In a real system, we'd run a separate agent instance
-            ;; Here we just simulate it to avoid recursive API calls in tests/demo
-            (println "[BG-REVIEW] Review completed.")))
-        (catch Exception e (println "BG Review failed:" (.getMessage e)))))))
-
-(defn call-model [messages system-prompt config]
-  (try
-    (let [body (json/generate-string
-                {:model (:model config)
-                 :messages (into [{:role "system" :content system-prompt}] messages)
-                 :tools (registry/get-definitions)})
-          response (http/post (str (:base-url config) "/chat/completions")
-                              {:headers {"Authorization" (str "Bearer " (:api-key config))
-                                         "Content-Type" "application/json"}
-                               :body body})]
-      (if (= 200 (:status response))
-        {:status :ok :data (json/parse-string (:body response) true)}
-        {:status :error :code (:status response) :message (:body response)}))
-    (catch Exception e
-      {:status :error :code 0 :message (.getMessage e)})))
-
-(defn call-auxiliary-llm [prompt-text]
-  (let [res (call-model [{:role "user" :content prompt-text}] 
-                        "You are a helpful assistant." 
-                        registry/*config*)]
-    (if (= :ok (:status res))
-      (get-in res [:data :choices 0 :message :content])
-      "Failed to summarize.")))
+  (println "\n[SYSTEM] Spawning background review thread...")
+  (future
+    (try
+      (binding [*memory-nudge-threshold* 0
+                *skill-nudge-threshold* 0]
+        (when review-memory
+          (println "[BG-REVIEW] Consolidating memory...")
+          (memory/consolidate! messages llm/call-auxiliary-llm))
+        (when review-skills
+          (println "[BG-REVIEW] Analyzing for new skills...")
+          (reviewer/review-trajectory messages))
+        (println "[BG-REVIEW] Review completed."))
+      (catch Exception e (println "BG Review failed:" (ex-message e))))))
 
 (defn run-conversation [session-id user-message agent-state]
   (swap! *turns-since-memory* inc)
   (let [history (if session-id (store/get-session-messages session-id) [])
         initial-messages (conj history {:role "user" :content user-message})]
-    
     (loop [messages initial-messages
            iteration 0
            retry-count 0
-           continuation-count 0]
-      
-      (if (or (>= iteration 30) (<= @registry/*budget* 0))
+           continuation-count 0
+           current-config registry/*config*]
+      (if (or (>= iteration (get-in current-config [:agent :max_turns] 90)) (<= @registry/*budget* 0))
         {:final-response "(max iterations reached)" :messages messages}
-        
-        (let [system-prompt (or (:cached-prompt @agent-state)
-                               (let [p (prompt/build-system-prompt
-                                        {:soul (prompt/load-soul)
-                                         :memory (memory/format-for-system-prompt "memory")
-                                         :user (memory/format-for-system-prompt "user")
-                                         :skills (skill/get-skill-index-prompt)
-                                         :project-context (prompt/load-project-context ".")})]
-                                 (swap! agent-state assoc :cached-prompt p)
-                                 p))
+        (let [system-prompt (prompt/build-system-prompt
+                              {:soul (prompt/load-soul)
+                               :memory (memory/format-for-system-prompt "memory")
+                               :user (memory/format-for-system-prompt "user")
+                               :skills (skill/get-skill-index-prompt)
+                               :project-context (prompt/load-project-context ".")})
               _ (swap! registry/*budget* dec)
-              response (call-model messages system-prompt registry/*config*)]
-          
+              
+              ;; Checkpointing (every 20 turns)
+              _ (when (and (pos? iteration) (zero? (mod iteration 20)))
+                  (println "\n[SYSTEM] Reached 20-turn checkpoint. Consolidating memory...")
+                  (memory/consolidate! messages llm/call-auxiliary-llm))
+
+              ;; Proactive Compaction Check
+              token-estimate (compression/estimate-tokens messages)
+              threshold (get-in current-config [:compression :threshold_tokens] 25000)
+              messages (if (and (get-in current-config [:compression :enabled] true)
+                                (> token-estimate threshold))
+                         (do (println (str "\n[SYSTEM] Proactive compaction triggered (" (int token-estimate) " tokens)..."))
+                             (compression/compress messages 
+                               {:protect-first 1 
+                                :tail-token-budget 10000 
+                                :call-llm-fn (fn [p] 
+                                               (let [compaction-cfg (assoc current-config :model (or (:fallback-model current-config) "inclusionai/ling-2.6-1t:free"))
+                                                     res (llm/call-model [{:role "user" :content p}] "You are a precise summarizer." compaction-cfg)]
+                                                 (if (= :ok (:status res))
+                                                   (get-in res [:data :choices 0 :message :content])
+                                                   "Failed to summarize history.")))}))
+                         messages)
+
+              response (llm/call-model messages system-prompt current-config)]
           (cond
             (= :error (:status response))
             (let [classified (recovery/classify-error (:code response) (:message response))]
               (cond
                 (:should-compress classified)
-                (recur (compression/compress messages {:protect-first 1 :tail-token-budget 5000 :call-llm-fn call-auxiliary-llm}) iteration 0 continuation-count)
-                (:retryable classified)
-                (do (Thread/sleep (long (recovery/jittered-backoff (inc retry-count))))
-                    (recur messages iteration (inc retry-count) continuation-count))
-                :else (throw (Exception. (str "API error: " (:message response))))))
+                (recur (compression/compress messages {:protect-first 1 :tail-token-budget 5000 :call-llm-fn llm/call-auxiliary-llm}) 
+                       iteration 0 0 current-config)
+                
+                (and (:should-fallback classified) (:fallback-model current-config))
+                (let [new-config (assoc current-config :model (:fallback-model current-config))]
+                  (println (str "\n[AUTO-HEAL] Switching to fallback model: " (:model new-config)))
+                  (recur messages iteration 0 0 new-config))
+
+                (and (:retryable classified) (< retry-count 10))
+                (do (println (str "\n[RETRY] API error (" (:reason classified) "), retrying... (attempt " (inc retry-count) ")"))
+                    (Thread/sleep (long (recovery/jittered-backoff (inc retry-count))))
+                    (recur messages iteration (inc retry-count) continuation-count current-config))
+                
+                :else (throw (Exception. (str "Terminal API error: " (:message response))))))
 
             (= "length" (get-in response [:data :choices 0 :finish_reason]))
             (recur (conj (conj messages (get-in response [:data :choices 0 :message])) 
                          {:role "user" :content recovery/continue-message}) 
-                   iteration 0 (inc continuation-count))
+                   iteration 0 (inc continuation-count) current-config)
+
+            (>= retry-count 10)
+            (throw (Exception. (str "Max retries reached: " (:message response))))
 
             :else
             (let [assistant-msg (get-in response [:data :choices 0 :message])
                   msg-to-add (cond-> {:role "assistant" :content (or (:content assistant-msg) "")}
                                (:tool_calls assistant-msg) (assoc :tool_calls (:tool_calls assistant-msg)))
                   new-messages (conj messages msg-to-add)]
-              
               (if-not (:tool_calls assistant-msg)
                 (do
                   (when session-id
                     (let [delta (subvec new-messages (count history))]
                       (store/add-messages! session-id delta)))
                   (let [final-resp {:final-response (:content assistant-msg) :messages new-messages}]
-                    ;; Check trigger
                     (let [review-mem (and (pos? *memory-nudge-threshold*) (>= @*turns-since-memory* *memory-nudge-threshold*))
                           review-skill (and (pos? *skill-nudge-threshold*) (>= @*iters-since-skill* *skill-nudge-threshold*))]
                       (when (or review-mem review-skill)
@@ -118,7 +122,6 @@
                         (reset! *iters-since-skill* 0)
                         (spawn-background-review! new-messages review-mem review-skill)))
                     final-resp))
-                
                 (let [tool-results (for [tc (:tool_calls assistant-msg)]
                                      (let [tool-name (get-in tc [:function :name])
                                            tool-args (get-in tc [:function :arguments])]
@@ -130,4 +133,4 @@
                                           {:role "tool"
                                            :tool_call_id (:id tc)
                                            :content result})))]
-                  (recur (into new-messages tool-results) (inc iteration) 0 0))))))))))
+                  (recur (into new-messages tool-results) (inc iteration) 0 0 current-config))))))))))

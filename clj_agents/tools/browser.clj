@@ -39,34 +39,38 @@
 (registry/register!
  {:name "browser_navigate"
   :handler navigate-handler
-  :schema {:name "browser_navigate"
-           :description "Open a URL and get a snapshot."
-           :parameters {:type "object"
-                        :properties {:url {:type "string"}}
-                        :required ["url"]}}})
+  :schema {:type "function"
+           :function {:name "browser_navigate"
+                      :description "Open a URL and get a snapshot."
+                      :parameters {:type "object"
+                                   :properties {:url {:type "string"}}
+                                   :required ["url"]}}}})
 
 (registry/register!
  {:name "browser_snapshot"
   :handler snapshot-handler
-  :schema {:name "browser_snapshot"
-           :description "Get the current page snapshot."
-           :parameters {:type "object" :properties {}}}})
+  :schema {:type "function"
+           :function {:name "browser_snapshot"
+                      :description "Get the current page snapshot."
+                      :parameters {:type "object" :properties {}}}}})
 
 (registry/register!
  {:name "browser_click"
   :handler click-handler
-  :schema {:name "browser_click"
-           :description "Click an element by reference."
-           :parameters {:type "object"
-                        :properties {:ref {:type "string"}}
-                        :required ["ref"]}}})
+  :schema {:type "function"
+           :function {:name "browser_click"
+                      :description "Click an element by reference."
+                      :parameters {:type "object"
+                                   :properties {:ref {:type "string"}}
+                                   :required ["ref"]}}}})
 
 (registry/register!
  {:name "browser_type"
   :handler type-handler
-  :schema {:name "browser_type"
-           :description "Type text into an element."
-           :parameters {:type "object"
-                        :properties {:ref {:type "string"}
-                                     :text {:type "string"}}
-                        :required ["ref" "text"]}}})
+  :schema {:type "function"
+           :function {:name "browser_type"
+                      :description "Type text into an element."
+                      :parameters {:type "object"
+                                   :properties {:ref {:type "string"}
+                                                :text {:type "string"}}
+                                   :required ["ref" "text"]}}}})

@@ -31,6 +31,12 @@
             (do
               (cli/show-status "Thinking...")
               (let [session-id "cli-session"
-                    agent-state (atom {:cached-prompt nil})]
-                (agent/run-conversation session-id input agent-state))))
+                    agent-state (atom {:cached-prompt nil})
+                    budget (atom (get-in runtime-config [:agent :max_turns] 90))]
+                (binding [registry/*session-id* session-id
+                          registry/*budget* budget
+                          registry/*config* runtime-config
+                          registry/*depth* 1]
+                  (let [result (agent/run-conversation session-id input agent-state)]
+                    (println (str "\nAssistant: " (:final-response result) "\n"))))))
           (recur))))))

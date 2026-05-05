@@ -66,7 +66,7 @@
         (doseq [job due]
           (try
             (fire-callback job)
-            (catch Exception e (println "Job failed:" (.getMessage e))))
+            (catch Exception e (println "Job failed:" (ex-message e))))
           (advance-job! job))
         (Thread/sleep 30000)
         (recur)))))

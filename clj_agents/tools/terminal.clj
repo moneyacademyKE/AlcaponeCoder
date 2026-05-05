@@ -18,7 +18,7 @@
               "(no output)"
               (subs output 0 (min (count output) 10000)))))
         (catch Exception e
-          (str "(error: " (.getMessage e) ")"))))))
+          (str "(error: " (ex-message e) ")"))))))
 
 (registry/register!
  {:name "terminal"

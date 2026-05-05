@@ -22,24 +22,50 @@
         {:meta meta :body body})
       {:meta {} :body text})))
 
-(defn list-skills []
+(defn list-skills [& {:keys [include-drafts]}]
   (let [dir (get-skills-dir)]
     (for [skill-dir (.listFiles dir)
           :when (.isDirectory skill-dir)
           :let [skill-md (io/file skill-dir "SKILL.md")]
           :when (.exists skill-md)]
       (let [content (slurp skill-md)
-            {:keys [meta]} (parse-skill-md content)]
-        {:name (.getName skill-dir)
-         :description (get meta "description" "No description provided.")
-         :path (.getAbsolutePath skill-dir)}))))
+            {:keys [meta]} (parse-skill-md content)
+            status (get meta "status" "verified")]
+        (when (or include-drafts (= status "verified"))
+          {:name (.getName skill-dir)
+           :description (get meta "description" "No description provided.")
+           :status status
+           :path (.getAbsolutePath skill-dir)})))))
 
 (defn get-skill-index-prompt []
-  (let [skills (list-skills)]
+  (let [skills (remove nil? (list-skills))]
     (if (empty? skills)
       nil
       (str "# Available Skills\n"
            (str/join "\n" (for [s skills] (str "- " (:name s) ": " (:description s))))))))
+
+(defonce usage-stats (atom {}))
+
+(defn- get-stats-file []
+  (io/file (get-skills-dir) "stats.json"))
+
+(defn load-stats! []
+  (let [f (get-stats-file)]
+    (if (.exists f)
+      (reset! usage-stats (json/parse-string (slurp f) true))
+      (reset! usage-stats {}))))
+
+(defn save-stats! []
+  (spit (get-stats-file) (json/generate-string @usage-stats)))
+
+(defn track-usage! [name success?]
+  (load-stats!)
+  (let [stats (get @usage-stats (keyword name) {:hits 0 :successes 0})
+        new-stats (-> stats
+                      (update :hits inc)
+                      (update :successes (fn [s] (if success? (inc s) s))))]
+    (swap! usage-stats assoc (keyword name) new-stats)
+    (save-stats!)))
 
 ;; Tool Implementations
 (defn skill-view-tool [{:keys [name]}]
@@ -47,17 +73,18 @@
         skill-md (io/file skill-dir "SKILL.md")]
     (if (.exists skill-md)
       (let [{:keys [body]} (parse-skill-md (slurp skill-md))]
+        (track-usage! name false) ;; Increment hits, success will be verified post-task
         body)
       (str "Skill '" name "' not found."))))
 
-(defn skill-manage-tool [{:keys [action name description content]}]
+(defn skill-manage-tool [{:keys [action name description content status] :or {status "verified"}}]
   (let [skill-dir (io/file (get-skills-dir) name)
         skill-md (io/file skill-dir "SKILL.md")]
     (case action
       "create"
       (do
         (.mkdirs skill-dir)
-        (spit skill-md (str "---\nname: " name "\ndescription: " description "\n---\n\n" content))
+        (spit skill-md (str "---\nname: " name "\ndescription: " description "\nstatus: " status "\n---\n\n" content))
         (str "Skill '" name "' created."))
       
       "edit"
@@ -81,20 +108,22 @@
 (registry/register!
   {:name "skill_view"
    :handler (fn [args] (skill-view-tool (json/parse-string args true)))
-   :schema {:name "skill_view"
-            :description "View the full content of a skill to follow its methodology."
-            :parameters {:type "object"
-                         :properties {:name {:type "string" :description "The name of the skill"}}
-                         :required ["name"]}}})
+   :schema {:type "function"
+            :function {:name "skill_view"
+                       :description "View the full content of a skill to follow its methodology."
+                       :parameters {:type "object"
+                                    :properties {:name {:type "string" :description "The name of the skill"}}
+                                    :required ["name"]}}}})
 
 (registry/register!
   {:name "skill_manage"
    :handler (fn [args] (skill-manage-tool (json/parse-string args true)))
-   :schema {:name "skill_manage"
-            :description "Create, edit, or delete skills based on experience."
-            :parameters {:type "object"
-                         :properties {:action {:type "string" :enum ["create" "edit" "delete"]}
-                                      :name {:type "string" :description "The name of the skill"}
-                                      :description {:type "string" :description "Short description (for create/edit)"}
-                                      :content {:type "string" :description "The full SKILL.md body content (for create/edit)"}}
-                         :required ["action" "name"]}}})
+   :schema {:type "function"
+            :function {:name "skill_manage"
+                       :description "Create, edit, or delete skills based on experience."
+                       :parameters {:type "object"
+                                    :properties {:action {:type "string" :enum ["create" "edit" "delete"]}
+                                                 :name {:type "string" :description "The name of the skill"}
+                                                 :description {:type "string" :description "Short description (for create/edit)"}
+                                                 :content {:type "string" :description "The full SKILL.md body content (for create/edit)"}}
+                                    :required ["action" "name"]}}}})

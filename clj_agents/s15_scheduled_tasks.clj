@@ -38,14 +38,15 @@
 (registry/register!
   {:name "cron"
    :handler (fn [args] (cron-tool (json/parse-string args true)))
-   :schema {:name "cron"
-            :description "Schedule a task to run in the future."
-            :parameters {:type "object"
-                         :properties {:action {:type "string" :enum ["create" "list" "delete"]}
-                                      :schedule {:type "string" :description "e.g. 30m, every 1h"}
-                                      :prompt {:type "string" :description "What to do"}
-                                      :job_id {:type "string"}}
-                         :required ["action"]}}})
+   :schema {:type "function"
+            :function {:name "cron"
+                       :description "Schedule a task to run in the future."
+                       :parameters {:type "object"
+                                    :properties {:action {:type "string" :enum ["create" "list" "delete"]}
+                                                 :schedule {:type "string" :description "e.g. 30m, every 1h"}
+                                                 :prompt {:type "string" :description "What to do"}
+                                                 :job_id {:type "string"}}
+                                    :required ["action"]}}}})
 
 ;; ===========================================================================
 ;; Entry Point

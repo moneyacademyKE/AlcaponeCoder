@@ -13,7 +13,7 @@
             session-id (str "batch-" i)
             result (try
                      (agent/run-conversation session-id prompt agent-state)
-                     (catch Exception e {:error (.getMessage e)}))]
+                     (catch Exception e {:error (ex-message e)}))]
         (if (:error result)
           (println "    FAILED:" (:error result))
           (let [messages (:messages result)

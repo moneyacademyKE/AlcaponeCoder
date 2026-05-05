@@ -65,14 +65,29 @@
       
       (str "Unknown action: " action))))
 
+(defn consolidate! [messages call-llm-fn]
+  (let [prompt "Review the following conversation history and extract any important facts, user preferences, or project state that should be saved to long-term memory. Output each fact as a single line starting with $. If nothing new, output nothing.\n\nCONVERSATION:\n"
+        history-text (str/join "\n" (map #(str (:role %) ": " (:content %)) messages))
+        result (call-llm-fn (str prompt history-text))]
+    (when-not (str/blank? result)
+      (let [new-facts (->> (str/split-lines result)
+                           (filter #(str/starts-with? % "$"))
+                           (map #(str/replace % #"^\$\s*" "")))]
+        (when (seq new-facts)
+          (let [existing (load-memory "memory")
+                updated (into existing new-facts)]
+            (save-memory "memory" updated)
+            (println (str "[MEMORY] Consolidated " (count new-facts) " new facts."))))))))
+
 ;; Register the tool
 (registry/register!
   {:name "memory"
    :handler (fn [args] (memory-tool (json/parse-string args true)))
-   :schema {:name "memory"
-            :description "Manage long-term memory across sessions. Use target='user' for personal info and target='memory' for project/env info."
-            :parameters {:type "object"
-                         :properties {:action {:type "string" :enum ["add" "remove" "read"]}
-                                      :content {:type "string" :description "The memory entry or search string for removal"}
-                                      :target {:type "string" :enum ["memory" "user"] :default "memory"}}
-                         :required ["action"]}}})
+   :schema {:type "function"
+            :function {:name "memory"
+                       :description "Manage long-term memory across sessions. Use target='user' for personal info and target='memory' for project/env info."
+                       :parameters {:type "object"
+                                    :properties {:action {:type "string" :enum ["add" "remove" "read"]}
+                                                 :content {:type "string" :description "The memory entry or search string for removal"}
+                                                 :target {:type "string" :enum ["memory" "user"] :default "memory"}}
+                                    :required ["action"]}}}})

@@ -4,8 +4,11 @@
             [clj-yaml.core :as yaml]))
 
 (def default-config
-  {:model "anthropic/claude-sonnet-4"
-   :agent {:max_turns 90}
+  {:model "tencent/hy3-preview:free"
+   :base-url "https://openrouter.ai/api/v1"
+   :api-key "${OPENAI_API_KEY}"
+   :agent {:max_turns 90 :max_tokens 4096}
+   :fallback-model "inclusionai/ling-2.6-1t:free"
    :compression {:enabled true :threshold 0.5}
    :memory {:enabled true :char_limit 2200}
    :delegation {:max_iterations 50}})

@@ -52,13 +52,20 @@
                     (str/join "\n" (map #(str "[" (:role %) "] " (subs (str (:content %)) 0 (min 500 (count (str (:content %)))))) middle)))]
     (call-llm-fn prompt)))
 
-(defn compress [messages {:keys [protect-first tail-token-budget call-llm-fn previous-summary]}]
-  (let [pruned (prune-old-tool-results messages 3)
+(defn should-compress? [messages threshold-tokens]
+  (> (estimate-tokens messages) threshold-tokens))
+
+(defn compress [messages {:keys [protect-first tail-token-budget call-llm-fn]}]
+  (let [;; Aggressively prune old tool results first (keep only 2)
+        pruned (prune-old-tool-results messages 2)
         [head-end tail-start] (find-boundaries pruned protect-first tail-token-budget)]
     (if (>= head-end tail-start)
       pruned ;; Nothing to compress in the middle
       (let [middle (subvec pruned head-end tail-start)
-            summary (summarize-middle middle previous-summary call-llm-fn)]
+            summary (summarize-middle middle nil call-llm-fn)]
         (vec (concat (subvec pruned 0 head-end)
-                     [{:role "user" :content (str "[CONTEXT COMPACTION]\n" summary)}]
+                     [{:role "user" :content (str "[SYSTEM: CONTEXT COMPACTION]\n"
+                                                 "History summarized to save context. Original goal and latest turns preserved.\n\n"
+                                                 "SUMMARY OF PREVIOUS WORK:\n" 
+                                                 summary)}]
                      (subvec pruned tail-start)))))))

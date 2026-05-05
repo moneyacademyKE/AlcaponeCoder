@@ -25,7 +25,7 @@
         (let [res (shell {:out :string :err :string :continue true :env env} "bash" "-c" wrapped)]
           {:out (:out res) :err (:err res) :exit (:exit res)})
         (catch Exception e
-          {:out "" :err (.getMessage e) :exit 1}))))
+          {:out "" :err (ex-message e) :exit 1}))))
   (cleanup [this]
     (let [snap-path (format "/tmp/hermes-snap-%s.sh" id)
           cwd-path (format "/tmp/hermes-cwd-%s.txt" id)]

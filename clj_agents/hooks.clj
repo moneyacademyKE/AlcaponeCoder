@@ -11,7 +11,7 @@
       (try
         (f event-type context)
         (catch Exception e
-          (println (str "[HOOK-ERROR] " event-type ": " (.getMessage e))))))))
+          (println (str "[HOOK-ERROR] " event-type ": " (ex-message e))))))))
 
 (defn clear! []
   (reset! handlers {}))

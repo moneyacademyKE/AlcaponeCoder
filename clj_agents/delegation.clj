@@ -19,9 +19,10 @@
   {:name "delegate_task"
    :handler (fn [args] (delegate-task-tool (json/parse-string args true)))
    :check_fn (fn [] (< registry/*depth* 2))
-   :schema {:name "delegate_task"
-            :description "Delegate a complex sub-task to a subagent with isolated context."
-            :parameters {:type "object"
-                         :properties {:goal {:type "string" :description "The goal for the subagent"}
-                                      :context {:type "string" :description "Additional context information"}}
-                         :required ["goal"]}}})
+   :schema {:type "function"
+            :function {:name "delegate_task"
+                       :description "Delegate a complex sub-task to a subagent with isolated context."
+                       :parameters {:type "object"
+                                    :properties {:goal {:type "string" :description "The goal for the subagent"}
+                                                 :context {:type "string" :description "Additional context information"}}
+                                    :required ["goal"]}}}})
