@@ -1,0 +1,4 @@
+{:paths ["clj_agents"]
+ :tasks
+ {agent-loop {:doc "Run s01 Agent Loop"
+              :task (shell "bb clj_agents/s01_agent_loop.clj")}}}
