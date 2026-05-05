@@ -33,8 +33,15 @@
       [])))
 
 (defn save-memory [target entries]
-  (let [f (get-memory-path target)]
-    (spit f (render-entries entries))))
+  (let [f (get-memory-path target)
+        limit (if (= target "user") user-limit memory-limit)
+        ;; Simple FIFO truncation: if total chars > limit, drop first entry and recur
+        truncated-entries (loop [current entries]
+                            (if (or (empty? current)
+                                    (<= (count (render-entries current)) limit))
+                              current
+                              (recur (rest current))))]
+    (spit f (render-entries truncated-entries))))
 
 (defn format-for-system-prompt [target]
   (let [entries (load-memory target)
@@ -63,6 +70,21 @@
       "read"
       (render-entries entries)
       
+      "search"
+      (let [query-words (str/split (str/lower-case content) #"\s+")
+            scored-entries (for [entry entries
+                                :let [entry-lc (str/lower-case entry)
+                                      matches (filter #(str/includes? entry-lc %) query-words)
+                                      score (count matches)]
+                                :when (pos? score)]
+                            {:entry entry :score score})
+            sorted-matches (->> scored-entries
+                                (sort-by :score >)
+                                (map :entry))]
+        (if (seq sorted-matches)
+          (render-entries sorted-matches)
+          "No matching memories found."))
+      
       (str "Unknown action: " action))))
 
 (defn consolidate! [messages call-llm-fn]
@@ -87,7 +109,7 @@
             :function {:name "memory"
                        :description "Manage long-term memory across sessions. Use target='user' for personal info and target='memory' for project/env info."
                        :parameters {:type "object"
-                                    :properties {:action {:type "string" :enum ["add" "remove" "read"]}
-                                                 :content {:type "string" :description "The memory entry or search string for removal"}
+                                    :properties {:action {:type "string" :enum ["add" "remove" "read" "search"]}
+                                                 :content {:type "string" :description "The memory entry or search string for removal/search"}
                                                  :target {:type "string" :enum ["memory" "user"] :default "memory"}}
                                     :required ["action"]}}}})

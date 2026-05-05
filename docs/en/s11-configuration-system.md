@@ -32,9 +32,13 @@ The root directory for the entire agent system. Defaults to `~/.hermes`.
 
 All configuration, memory, sessions, skills, and logs live under this directory. It is a fully self-contained runtime root.
 
-```python
-def get_hermes_home() -> Path:
-    return Path(os.getenv("HERMES_HOME", Path.home() / ".hermes"))
+```clojure
+(defn get-hermes-home []
+  (let [env-home (or (System/getenv "HERMES_HOME")
+                     (System/getProperty "HERMES_HOME"))]
+    (if env-home
+      (io/file env-home)
+      (io/file (System/getProperty "user.home") ".hermes"))))
 ```
 
 By setting the `HERMES_HOME` environment variable, you can point the entire system to any directory. This is especially useful in Docker and Profile scenarios.
@@ -107,78 +111,16 @@ There is only one key point:
 
 This is the complete default dictionary defined in code. It establishes the default value for every configurable option:
 
-```python
-DEFAULT_CONFIG = {
-    "model": "",
-    "providers": {},
-    "fallback_providers": [],
-    "credential_pool_strategies": {},
-    "toolsets": ["hermes-cli"],
-
-    "agent": {
-        "max_turns": 90,
-        "gateway_timeout": 1800,
-        "tool_use_enforcement": "auto",
-    },
-
-    "terminal": {
-        "backend": "local",
-        "timeout": 180,
-        "docker_image": "nikolaik/python-nodejs:python3.11-nodejs20",
-        "persistent_shell": True,
-    },
-
-    "compression": {
-        "enabled": True,
-        "threshold": 0.50,
-        "target_ratio": 0.20,
-        "protect_last_n": 20,
-    },
-
-    "delegation": {
-        "model": "",
-        "provider": "",
-        "base_url": "",
-        "api_key": "",
-        "max_iterations": 50,
-        "reasoning_effort": "",
-    },
-
-    "memory": {
-        "memory_enabled": True,
-        "user_profile_enabled": True,
-        "memory_char_limit": 2200,
-        "user_char_limit": 1375,
-    },
-
-    "display": {
-        "compact": False,
-        "personality": "kawaii",
-        "streaming": False,
-        "show_cost": False,
-    },
-
-    "approvals": {
-        "mode": "manual",
-        "timeout": 60,
-    },
-
-    "command_allowlist": [],
-
-    "tts": {
-        "provider": "edge",
-    },
-
-    "auxiliary": {
-        "vision":         {"provider": "auto", "model": ""},
-        "web_extract":    {"provider": "auto", "model": ""},
-        "compression":    {"provider": "auto", "model": ""},
-        "session_search": {"provider": "auto", "model": ""},
-        "approval":       {"provider": "auto", "model": ""},
-    },
-
-    "_config_version": 17,
-}
+```clojure
+(def default-config
+  {:model "tencent/hy3-preview:free"
+   :base-url "https://openrouter.ai/api/v1"
+   :api-key "${OPENAI_API_KEY}"
+   :agent {:max_turns 90 :max_tokens 4096}
+   :fallback-model "inclusionai/ling-2.6-1t:free"
+   :compression {:enabled true :threshold_tokens 20000}
+   :memory {:enabled true :char_limit 8000}
+   :delegation {:max_iterations 50}})
 ```
 
 This dictionary serves two purposes:
@@ -288,20 +230,11 @@ DEFAULT_CONFIG = {
 
 This is the most critical function in the configuration system. If the user only overrode `compression.threshold`, the other fields must not be lost:
 
-```python
-def _deep_merge(base: dict, override: dict) -> dict:
-    """Recursive merge. override replaces base, but only for fields it declares."""
-    result = base.copy()
-    for key, value in override.items():
-        if (
-            key in result
-            and isinstance(result[key], dict)
-            and isinstance(value, dict)
-        ):
-            result[key] = _deep_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
+```clojure
+(defn deep-merge [a b]
+  (if (and (map? a) (map? b))
+    (merge-with deep-merge a b)
+    b))
 ```
 
 Why not just use `base.update(override)`? Because `update` replaces entire sub-dictionaries:
@@ -359,21 +292,23 @@ delegation:
   api_key: "${OPENROUTER_API_KEY}"
 ```
 
-```python
-import re
-
-def _expand_env_vars(obj):
-    if isinstance(obj, str):
-        return re.sub(
-            r"\${([^}]+)}",
-            lambda m: os.environ.get(m.group(1), m.group(0)),
-            obj,
-        )
-    if isinstance(obj, dict):
-        return {k: _expand_env_vars(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_expand_env_vars(item) for item in obj]
-    return obj
+```clojure
+(defn expand-env-vars [obj]
+  (cond
+    (string? obj)
+    (str/replace obj #"\$\{([^}]+)\}"
+                 (fn [[_ var-name]]
+                   (or (System/getenv var-name)
+                       (System/getProperty var-name)
+                       (str "${" var-name "}"))))
+    
+    (map? obj)
+    (update-vals obj expand-env-vars)
+    
+    (vector? obj)
+    (mapv expand-env-vars obj)
+    
+    :else obj))
 ```
 
 Unresolved references (when the environment variable doesn't exist) remain as `${VAR}` rather than becoming empty strings. This lets callers detect "this value isn't properly configured."
@@ -389,7 +324,15 @@ def save_config(config: dict):
     os.chmod(config_path, 0o600)  # Owner read/write only
 ```
 
-That's the minimal version. Six steps: define defaults -> deep merge -> load YAML -> load .env -> expand references -> save.
+## The Implicit Auth Discovery Pattern
+
+A key hardening feature in the Babashka port is the **Implicit Auth Discovery Pattern**. In isolated environments like CI/CD or benchmark containers (Harbor), environment variables are often missing. The configuration system addresses this by layered discovery:
+
+1. **Auto-Discovery**: `(load-config)` proactively calls `(load-env)` to search for `.env` files in standard locations (`~/.hermes/`).
+2. **Expansion with Fallback**: If the primary `${OPENAI_API_KEY}` expansion fails (e.g., remains literal), the loader automatically checks for fallback keys like `OPENROUTER_API_KEY`.
+3. **Explicit Warnings**: If critical keys are still missing, warnings are emitted to stderr to prevent silent failures.
+
+This ensures the agent can authenticate even when the host shell is not fully configured.
 
 ## Hermes Agent's unique design choices
 

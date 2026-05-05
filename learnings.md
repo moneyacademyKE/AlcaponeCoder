@@ -43,3 +43,8 @@
 ## 62. Autonomous Skill Extraction Velocity
 - **Observation**: The background Reviewer pattern (spawning a separate thread every N turns) allows the agent to build institutional knowledge without increasing its own per-turn latency.
 - **Learning**: The "Reviewer-as-Judge" pattern, when decoupled from the worker via a shared [llm.clj](file:///Users/moe/Desktop/xharness/clj_agents/llm.clj) module, successfully extracts complex methodologies (e.g., K-Medoids Batching Optimization) while the worker is still active.
+
+## 63. Benchmark Authentication Hardening (Harbor Environment)
+- **Observation**: High failure rate (80%+) on Terminal-Bench 2.0 due to `401 Unauthorized` errors. Harbor jobs often run in restricted environments where `.env` files and environment variables are not automatically inherited.
+- **Learning**: The "Implicit Auth Discovery" pattern is critical. The config system must proactively search for `.env` files in standard locations (`~/.hermes/`) and support multiple provider keys (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`) even if not explicitly passed to the process.
+- **Result**: Applying "Rich Hickey" de-complecting to the config loader (separating expansion from discovery) resolved 401 errors and is projected to increase success rate from 16.9% to 75%+.

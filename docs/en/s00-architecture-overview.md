@@ -16,6 +16,7 @@ Hermes Agent is different. From day one it was designed as a **cross-platform au
 - All conversations are persisted to SQLite with full-text search; nothing is lost on restart
 - No vendor lock-in: 200+ models are supported through the OpenAI-compatible API interface
 - A complete trajectory collection and RL training pipeline -- conversation history can be used directly to train the next-generation model
+- **Lisp-Powered Core**: Re-architected in Babashka (Clojure) to leverage functional purity, immutability, and "Simple Made Easy" principles.
 
 These are not features bolted on after the fact. They shaped the core design from the very beginning.
 
@@ -28,9 +29,6 @@ What this repository truly aims to reconstruct is:
 - What the core layers of Hermes Agent are
 - Why each layer exists
 - What happens between the moment a user sends a message and the moment the agent replies
-- Where the critical state lives
-- Which design decisions enable it to serve multiple platforms at once
-
 Our goal:
 
 **Reconstruct the design decisions and architectural layering unique to Hermes Agent, rather than deliver generic agent tutorials.**
@@ -162,7 +160,11 @@ Key insight: **The only difference between the Gateway scenario and the CLI scen
 
 These five decisions are the keys to understanding the system. Without grasping them, later chapters will leave you wondering "why was it done this way?"
 
-### 1. Why Use the OpenAI SDK as the Only API Client
+### 1. Simple Made Easy: De-complecting State from Logic
+
+Following Rich Hickey's philosophy, Hermes Agent separates "what happens" (pure logic) from "where it happens" (execution context). By using Clojure's immutable data structures and atoms, we eliminate entire classes of race conditions and state-rot bugs common in complex agent loops.
+
+### 2. Why Use the OpenAI SDK as the Only API Client
 
 Hermes Agent is not locked to any single model provider. It uses the OpenAI Python SDK (`from openai import OpenAI`) and connects to different providers by setting different `base_url` values.
 

@@ -69,3 +69,16 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 - **Problem**: Human-in-the-loop security gates break automated pipelines.
 - **Solution**: Use an environment variable (e.g., `HEADLESS=true`) to toggle between interactive `read-line` prompts and automated audit logging. This follows the "Simple Made Easy" principle of de-complecting the *execution environment* from the *safety policy*.
 ```
+
+### 9. The Implicit Auth Discovery Pattern
+- **Problem**: Agents running in CI/CD, benchmarks (Harbor), or background cron jobs often lack inherited shell environment variables, leading to 401/403 errors.
+- **Solution**: Implement a layered discovery strategy in the config loader. Proactively load `.env` files from institutional directories (`~/.hermes/`) and attempt variable expansion with fallbacks across multiple potential keys.
+```clojure
+(defn load-config []
+  (config/load-env) ;; Discovery
+  (let [base (expand-env-vars default-config)] ;; Expansion
+    (if (missing-auth? base)
+      (try-fallbacks base ["OPENROUTER_API_KEY" "DEEPSEEK_API_KEY"])
+      base)))
+```
+- **Benefits**: Decouples the agent's ability to authenticate from the host's interactive environment. Ensures high reliability in automated benchmark pipelines.

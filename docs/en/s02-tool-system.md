@@ -19,13 +19,13 @@ Key insight: adding a tool should not require changing the loop or any central c
 Hermes Agent splits the tool system into three layers, connected by an import chain:
 
 ```
-registry.py          (imports no tools)
+registry.clj          (imports no tools)
      ^
-tools/*.py           (imports registry, registers itself)
+tools/*.clj           (imports registry, registers itself)
      ^
-model_tools.py       (imports all tools/*.py, triggering registration)
+agent.clj             (requires tools, triggering registration)
      ^
-run_agent.py         (imports model_tools.py, uses the interface)
+run_harbor.clj        (entry point, requires agent)
 
 The registry sits at the bottom and depends on no tools.
 This is the key to making the whole design work.
@@ -37,23 +37,27 @@ This is the key to making the whole design work.
 
 Each tool file calls `register()` at the end:
 
-```python
-# tools/web_tools.py
-from tools.registry import registry
+```clojure
+;; tools/terminal.clj
+(ns tools.terminal
+  (:require [registry]
+            [backend]))
 
-def handle_web_search(args, **kwargs):
-    query = args.get("query", "")
-    # ... perform search ...
-    return json.dumps({"results": [...]})
+(defn handler [arguments]
+  (let [args (json/parse-string arguments true)
+        command (:command args)]
+    (let [{:keys [out err]} (backend/run-bash registry/*env* command)]
+      (str out err))))
 
-registry.register(
-    name="web_search",
-    toolset="web",
-    schema={"name": "web_search", "description": "Search the web", "parameters": {...}},
-    handler=handle_web_search,
-    is_async=True,
-    requires_env=["SERP_API_KEY"],
-)
+(registry/register!
+ {:name "terminal"
+  :handler handler
+  :schema {:type "function"
+           :function {:name "terminal"
+                      :description "Run a shell command"
+                      :parameters {:type "object"
+                                   :properties {:command {:type "string"}}
+                                   :required ["command"]}}}})
 ```
 
 ### 2. The Orchestration Layer Triggers Discovery
@@ -104,16 +108,20 @@ Result: the registry now contains 50+ tools, and dispatch("web_search") in the l
 
 ### 3. The Registry Dispatches Execution
 
-```python
-# tools/registry.py
-class ToolRegistry:
-    def dispatch(self, name, args, **kwargs):
-        entry = self._tools.get(name)
-        if not entry:
-            return json.dumps({"error": f"Unknown tool: {name}"})
-        if entry.is_async:
-            return _run_async(entry.handler(args, **kwargs))
-        return entry.handler(args, **kwargs)
+```clojure
+;; registry.clj
+(def registry (atom {}))
+
+(defn register! [{:keys [name handler schema] :as tool}]
+  (swap! registry assoc name tool))
+
+(defn dispatch [name arguments]
+  (if-let [tool (get @registry name)]
+    (try
+      ((:handler tool) arguments)
+      (catch Exception e
+        (json/generate-string {:status "error" :message (ex-message e)})))
+    (json/generate-string {:status "error" :message (str "Unknown tool: " name)})))
 ```
 
 The `is_async` flag is a design unique to Hermes. The core loop is synchronous, but tools like network requests and browser operations are async. When the registry sees the flag, it automatically routes through the async bridge. Neither the tool files nor the core loop need to worry about this detail.

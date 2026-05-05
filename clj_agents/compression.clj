@@ -4,12 +4,11 @@
             [babashka.http-client :as http]))
 
 (defn estimate-tokens [messages]
-  ;; Rough estimation: characters / 4
   (let [total-chars (reduce (fn [acc msg]
                               (+ acc (count (str (:content msg)))
                                  (count (str (:tool_calls msg)))))
                             0 messages)]
-    (/ total-chars 4)))
+    (Math/ceil (/ total-chars 3.5))))
 
 (defn prune-old-tool-results [messages keep-recent]
   (let [tool-indices (keep-indexed (fn [idx msg] (when (= (:role msg) "tool") idx)) messages)

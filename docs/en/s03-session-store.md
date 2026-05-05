@@ -38,8 +38,8 @@ In Gateway mode, the continuous conversation within a single chat window is one 
 
 WAL is a SQLite journaling mode (Write-Ahead Logging). Enabling it takes one line:
 
-```python
-conn.execute("PRAGMA journal_mode=WAL")
+```clojure
+(jdbc/execute! ds ["PRAGMA journal_mode=WAL"])
 ```
 
 **First, the problem: why is WAL needed?**
@@ -175,13 +175,14 @@ Not a data structure you manipulate directly. It is a search index maintained au
 
 ### Step 1: Create the Tables
 
-```python
-import sqlite3
+```clojure
+(require '[next.jdbc :as jdbc])
 
-conn = sqlite3.connect("state.db")
-conn.execute("PRAGMA journal_mode=WAL")
+(def ds (jdbc/get-datasource {:dbtype "sqlite" :dbname "state.db"}))
 
-conn.executescript("""
+(jdbc/execute! ds ["PRAGMA journal_mode=WAL"])
+
+(jdbc/execute! ds ["
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     source TEXT NOT NULL,
@@ -195,7 +196,7 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT,
     timestamp REAL NOT NULL
 );
-""")
+"])
 ```
 
 That is the minimal version. Two tables, WAL mode, ready to go.
@@ -205,37 +206,21 @@ That is the minimal version. Two tables, WAL mode, ready to go.
 ```python
 import uuid, time
 
-def create_session(conn, source="cli"):
-    session_id = str(uuid.uuid4())
-    conn.execute(
-        "INSERT INTO sessions (id, source, started_at) VALUES (?, ?, ?)",
-        (session_id, source, time.time()),
-    )
-    conn.commit()
-    return session_id
-```
+```clojure
+(defn create-session! [ds source]
+  (let [id (str (java.util.UUID/randomUUID))]
+    (jdbc/execute! ds ["INSERT INTO sessions (id, source, started_at) VALUES (?, ?, ?)"
+                       id source (quot (System/currentTimeMillis) 1000)])
+    id))
 
-### Step 3: Write Messages
+(defn add-messages! [ds session-id messages]
+  (jdbc/with-transaction [tx ds]
+    (doseq [msg messages]
+      (jdbc/execute! tx ["INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)"
+                         session-id (:role msg) (:content msg) (quot (System/currentTimeMillis) 1000)]))))
 
-```python
-def add_messages(conn, session_id, messages):
-    for msg in messages:
-        conn.execute(
-            "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
-            (session_id, msg["role"], msg.get("content", ""), time.time()),
-        )
-    conn.commit()
-```
-
-### Step 4: Read History
-
-```python
-def get_session_messages(conn, session_id):
-    rows = conn.execute(
-        "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id",
-        (session_id,),
-    ).fetchall()
-    return [{"role": r[0], "content": r[1]} for r in rows]
+(defn get-session-messages [ds session-id]
+  (jdbc/execute! ds ["SELECT role, content FROM messages WHERE session_id = ? ORDER BY id" session-id]))
 ```
 
 ### Step 5: Plug It Into the Loop

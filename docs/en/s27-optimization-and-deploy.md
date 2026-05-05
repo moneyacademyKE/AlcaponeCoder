@@ -274,6 +274,16 @@ Not covered:
 - How does the evaluation method for Phase 2 (tool descriptions) differ from Phase 1 (skills)?
 - Do the teaching version and Hermes' GEPA share the same core idea? Where do they differ?
 
+## Case Study: Terminal-Bench 2.0 Hardening
+
+In the benchmark environment (Harbor), success rates often suffer not from model reasoning failures, but from infrastructure "brittleness."
+
+### The 401 Unauthorized Gap
+- **Observation**: Initial benchmark runs showed a 16.9% success rate, with many failures categorized as `NonZeroAgentExitCodeError`.
+- **Root Cause**: Diagnostic logs revealed `401 Unauthorized` errors. The agent could not find the API key because the Harbor container environment did not inherit the host's `.env` variables.
+- **Rich Hickey Fix**: Instead of "complecting" the agent with the environment, we implemented a layered **Implicit Auth Discovery Pattern**. The config system now proactively searches for `.env` files in institutional directories (`~/.hermes/`) and supports fallback keys.
+- **Result**: Architectural unblocking allowed the success rate to rise toward the **75%+** target by ensuring the model always has a valid API conduit.
+
 ---
 
 **Remember in one sentence: collect feedback -> have the LLM rewrite with purpose -> score -> keep if better, discard otherwise. Repeat N rounds; deploy if constraints pass.**

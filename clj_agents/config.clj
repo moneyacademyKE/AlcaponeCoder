@@ -9,8 +9,8 @@
    :api-key "${OPENAI_API_KEY}"
    :agent {:max_turns 90 :max_tokens 4096}
    :fallback-model "inclusionai/ling-2.6-1t:free"
-   :compression {:enabled true :threshold 0.5}
-   :memory {:enabled true :char_limit 2200}
+   :compression {:enabled true :threshold_tokens 20000}
+   :memory {:enabled true :char_limit 8000}
    :delegation {:max_iterations 50}})
 
 (defn get-hermes-home []
@@ -41,9 +41,14 @@
     (string? obj)
     (str/replace obj #"\$\{([^}]+)\}"
                  (fn [[_ var-name]]
-                   (or (System/getProperty var-name)
-                       (System/getenv var-name)
-                       (str "${" var-name "}"))))
+                   (let [v (or (System/getProperty var-name)
+                               (System/getenv var-name))]
+                     (if v
+                       v
+                       (do (when (contains? #{"OPENAI_API_KEY" "OPENROUTER_API_KEY"} var-name)
+                             (binding [*out* *err*]
+                               (println (str "WARNING: Environment variable " var-name " is not set!"))))
+                           (str "${" var-name "}"))))))
     
     (map? obj)
     (into {} (for [[k v] obj] [k (expand-env-vars v)]))
@@ -54,13 +59,21 @@
     :else obj))
 
 (defn load-config []
+  (load-env)
   (let [home (get-hermes-home)
         _ (.mkdirs home)
         config-file (io/file home "config.yaml")
         user-config (if (.exists config-file)
                       (yaml/parse-string (slurp config-file))
-                      {})]
-    (expand-env-vars (deep-merge default-config user-config))))
+                      {})
+        expanded (expand-env-vars (deep-merge default-config user-config))]
+    (if (str/starts-with? (:api-key expanded) "${")
+      (let [fallback (or (System/getenv "OPENROUTER_API_KEY") 
+                         (System/getProperty "OPENROUTER_API_KEY"))]
+        (if fallback
+          (assoc expanded :api-key fallback)
+          expanded))
+      expanded)))
 
 (defn save-config [config]
   (let [home (get-hermes-home)

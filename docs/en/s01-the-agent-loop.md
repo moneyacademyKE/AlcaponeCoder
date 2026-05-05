@@ -80,30 +80,20 @@ Hermes Agent maintains two copies of messages internally:
 
 Simple example:
 
-```python
-# messages (full internal version)
-messages = [
-    {"role": "user", "content": "What's the weather today?"},
-    {
-        "role": "assistant",
-        "content": "Let me check",
-        "reasoning": "User asked about weather, I should call a tool",  # <- internal field
-        "_internal_token_count": 42,                                     # <- internal field
-    },
-]
+```clojure
+;; messages (full internal version)
+(def messages (atom [
+    {:role "user" :content "What's the weather today?"}
+    {:role "assistant"
+     :content "Let me check"
+     :reasoning "User asked about weather, I should call a tool"  ; <- internal field
+     :_internal_token_count 42}                                   ; <- internal field
+]))
 
-# Clean up before calling the API ->
-api_messages = [
-    {"role": "system", "content": "You are Hermes..."},   # <- prepended
-    {"role": "user", "content": "What's the weather today?"},
-    {
-        "role": "assistant",
-        "content": "Let me check",
-        # reasoning and _internal_token_count have been stripped
-    },
-]
-
-client.chat.completions.create(messages=api_messages, ...)
+;; Clean up before calling the API ->
+(defn get-api-messages [msgs system-prompt]
+  (into [{:role "system" :content system-prompt}]
+        (map #(dissoc % :reasoning :_internal_token_count) msgs)))
 ```
 
 Why maintain two copies?
@@ -157,31 +147,22 @@ What truly matters is two things:
 
 An OpenAI-format message. Three roles:
 
-```python
-# User message
-{"role": "user", "content": "Search for what's new in Python 3.12"}
+```clojure
+;; User message
+{:role "user" :content "Search for what's new in Python 3.12"}
 
-# Assistant message (with tool calls)
-{
-    "role": "assistant",
-    "content": None,
-    "tool_calls": [
-        {
-            "id": "call_abc",
-            "function": {
-                "name": "web_search",
-                "arguments": '{"query": "Python 3.12 new features"}',
-            },
-        }
-    ],
-}
+;; Assistant message (with tool calls)
+{:role "assistant"
+ :content nil
+ :tool_calls [{:id "call_abc"
+               :type "function"
+               :function {:name "web_search"
+                          :arguments "{\"query\": \"Python 3.12 new features\"}"}}]}
 
-# Tool result
-{
-    "role": "tool",
-    "tool_call_id": "call_abc",
-    "content": "Python 3.12 introduces...",
-}
+;; Tool result
+{:role "tool"
+ :tool_call_id "call_abc"
+ :content "Python 3.12 introduces..."}
 ```
 
 Note `tool_call_id` -- it matches a result to its corresponding call. The model may invoke multiple tools in a single turn, and every result must be matched to the right call.
@@ -211,46 +192,29 @@ All model providers are accessed through this single client. Switching models on
 ### Step 2: Build the Loop
 
 ```python
-def run_conversation(user_message, system_prompt, tools, max_iterations=90):
-    messages = [{"role": "user", "content": user_message}]
-    
-    for i in range(max_iterations):
-        # Assemble API messages: system prompt + conversation history
-        api_messages = [{"role": "system", "content": system_prompt}] + messages
-        
-        # Call the model
-        response = client.chat.completions.create(
-            model="anthropic/claude-sonnet-4",
-            messages=api_messages,
-            tools=tools,
-        )
-        
-        assistant_msg = response.choices[0].message
-        
-        # Write the assistant reply back into history (whether or not it has tool_calls)
-        messages.append({
-            "role": "assistant",
-            "content": assistant_msg.content,
-            "tool_calls": [
-                {"id": tc.id, "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
-                for tc in (assistant_msg.tool_calls or [])
-            ] or None,
-        })
-        
-        # No tool_calls -> done
-        if not assistant_msg.tool_calls:
-            return {"final_response": assistant_msg.content, "messages": messages}
-        
-        # Execute each tool and write results back
-        for tool_call in assistant_msg.tool_calls:
-            output = run_tool(tool_call.function.name, tool_call.function.arguments)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": output,
-            })
-    
-    return {"final_response": "Reached maximum iteration count", "messages": messages}
+```clojure
+(defn run-conversation [session-id user-instruction state-atom]
+  (let [system-prompt (prompt/build-system-prompt {:soul (prompt/load-soul)})
+        initial-messages [{:role "user" :content user-instruction}]]
+    (loop [messages initial-messages
+           turn 0]
+      (if (>= turn @registry/*budget*)
+        {:final-response "Reached maximum iteration count" :messages messages}
+        (let [response (llm/call-model messages system-prompt registry/*config*)]
+          (if (= :error (:status response))
+            (handle-error response)
+            (let [assistant-msg (get-in response [:data :choices 0 :message])
+                  new-messages (conj messages assistant-msg)]
+              (if-not (:tool_calls assistant-msg)
+                {:final-response (:content assistant-msg) :messages new-messages}
+                (let [tool-results (for [tc (:tool_calls assistant-msg)]
+                                     (let [tool-name (get-in tc [:function :name])
+                                           tool-args (get-in tc [:function :arguments])
+                                           result (registry/dispatch tool-name tool-args)]
+                                       {:role "tool"
+                                        :tool_call_id (:id tc)
+                                        :content result}))]
+                  (recur (into new-messages tool-results) (inc turn))))))))))
 ```
 
 This is the minimal Hermes Agent loop.

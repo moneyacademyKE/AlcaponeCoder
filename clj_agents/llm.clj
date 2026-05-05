@@ -18,9 +18,11 @@
                                 :throw false})]
       (if (= 200 (:status response))
         {:status :ok :data (json/parse-string (:body response) true)}
-        {:status :error :code (:status response) :message (:body response)}))
+        (let [err-msg (str "API error: " (:status response) " - " (:body response) 
+                           " (Model: " (:model config) ", URL: " (:base-url config) ")")]
+          {:status :error :code (:status response) :message err-msg})))
     (catch Exception e
-      {:status :error :code 503 :message (ex-message e)})))
+      {:status :error :code 503 :message (str "HTTP Request failed: " (ex-message e))})) )
 
 (defn call-auxiliary-llm [prompt-text]
   (let [res (call-model [{:role "user" :content prompt-text}] 
