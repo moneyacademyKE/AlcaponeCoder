@@ -30,43 +30,46 @@
       :else ;; Default to 1 min for unknown/cron-lite
       [(+ now 60000) false])))
 
-(defonce job-store (atom {})) ;; id -> CronJob
-
-(defn load-jobs! []
-  (let [f (io/file "jobs.json")]
+(defn load-jobs! [system]
+  (let [f (io/file "jobs.json")
+        job-store (get system :cron-jobs (atom {}))]
     (when (.exists f)
       (let [data (json/parse-string (slurp f) true)]
         (reset! job-store (into {} (for [j data] [(:job-id j) (map->CronJob j)])))))))
 
-(defn save-jobs! []
-  (spit "jobs.json" (json/generate-string (vals @job-store) {:pretty true})))
+(defn save-jobs! [system]
+  (let [job-store (get system :cron-jobs (atom {}))]
+    (spit "jobs.json" (json/generate-string (vals @job-store) {:pretty true}))))
 
-(defn add-job! [job]
-  (swap! job-store assoc (:job-id job) job)
-  (save-jobs!))
+(defn add-job! [system job]
+  (let [job-store (get system :cron-jobs (atom {}))]
+    (swap! job-store assoc (:job-id job) job)
+    (save-jobs! system)))
 
-(defn remove-job! [id]
-  (swap! job-store dissoc id)
-  (save-jobs!))
+(defn remove-job! [system id]
+  (let [job-store (get system :cron-jobs (atom {}))]
+    (swap! job-store dissoc id)
+    (save-jobs! system)))
 
-(defn get-due-jobs []
-  (let [now (System/currentTimeMillis)]
+(defn get-due-jobs [system]
+  (let [now (System/currentTimeMillis)
+        job-store (get system :cron-jobs (atom {}))]
     (filter (fn [j] (>= now (:next-fire j))) (vals @job-store))))
 
-(defn advance-job! [job]
+(defn advance-job! [system job]
   (if (:one-shot job)
-    (remove-job! (:job-id job))
+    (remove-job! system (:job-id job))
     (let [[next-fire _] (parse-schedule (:schedule job))]
-      (add-job! (assoc job :next-fire next-fire)))))
+      (add-job! system (assoc job :next-fire next-fire)))))
 
-(defn start-scheduler! [fire-callback]
+(defn start-scheduler! [system fire-callback]
   (future
     (loop []
-      (let [due (get-due-jobs)]
+      (let [due (get-due-jobs system)]
         (doseq [job due]
           (try
             (fire-callback job)
             (catch Exception e (println "Job failed:" (ex-message e))))
-          (advance-job! job))
+          (advance-job! system job))
         (Thread/sleep 30000)
         (recur)))))

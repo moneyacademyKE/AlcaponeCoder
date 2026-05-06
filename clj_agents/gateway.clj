@@ -3,6 +3,7 @@
             [registry]
             [store]
             [backend]
+            [system]
             [clojure.string :as str]
             [adapters.telegram :as telegram]))
 
@@ -12,8 +13,6 @@
       (format "agent:main:%s:dm:%s" platform chat-id)
       (format "agent:main:%s:group:%s:%s" platform chat-id user-id))))
 
-(defonce active-sessions (atom {})) ;; session-key -> future
-
 (defn handle-message [runner event]
   (let [session-key (build-session-key (:source event))
         platform (get-in event [:source :platform])
@@ -21,12 +20,7 @@
         agent-state (get-in @runner [:agents session-key] (atom {:cached-prompt nil}))
         config (:config @runner)
         ;; Create a system map for this conversation turn
-        system {:id session-key
-                :config config
-                :budget (atom 90)
-                :depth 0
-                :env (backend/create-env :local)
-                :browser-process (atom nil)}]
+        system (system/create-system :session-id session-key :config config)]
     
     (swap! runner assoc-in [:agents session-key] agent-state)
     

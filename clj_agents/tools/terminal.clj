@@ -9,7 +9,7 @@
 (defn handler [system arguments]
   (let [args (json/parse-string arguments true)
         command (:command args)]
-    (if-not (permissions/check-permission (:id system) command)
+    (if-not (permissions/check-permission system command)
       (json/generate-string {:status "error" :message (str "Permission denied for command: " command)})
       (try
         (let [res (backend/run-bash (:env system) command)

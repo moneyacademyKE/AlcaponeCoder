@@ -166,8 +166,19 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 **Benefit**: Atomic, deterministic, testable. System creation is a pure data transformation.
 **Anti-pattern**: `(atom {})` for `:registry` + calling `registry/register` (pure) = silent runtime crash.
 
-## Pattern 16: Config Key Consistency Guard
-**Context**: Config keys defined at write-site (defaults map) and read-site (agent loop) drift silently — the system uses defaults and appears to "work" while ignoring all user config.
-**Solution**: When writing a new config key, immediately grep all read-sites. Name the key at definition time and use a `def` constant to share it.
-**Verification**: `grep -r "threshold" clj_agents/` after every config change to ensure write/read sites agree.
-**Result**: Silent config ignorance is eliminated — system respects `config.yaml` settings.
+## 15. The "Read/Write Config Key Symmetry Guard" Pattern
+**Problem**: You change the config file, but the agent ignores the change. For example, changing `:threshold_tokens 20000` in `config.clj` does nothing because `agent.clj` reads `:threshold_chars`.
+**Pattern**: Whenever introducing a config setting, it must exist at a distinct `[domain key]` path. Before assuming a key works, run a repository-wide grep for both the read site `(get-in config ...)` and write site/default `(def defaults ...)`.
+**Validation**:
+1. Check `config.yaml` for typo (e.g. `threshold_token` instead of `threshold_chars`).
+2. Run `grep -r ":threshold_chars" clj_agents/` to ensure read and write sites match.
+
+## 16. The "Rich Hickey System-Scoped Atom" Pattern
+**Problem**: Your core loop is pure functional value-passing, but your telemetry (`usage-stats`), authorization (`session-approvals`), or scheduler (`job-store`) modules use `defonce` global atoms. This breaks system isolation, making it impossible to safely run parallel agents in the same JVM/process.
+**Pattern**: Never use `defonce` or global atoms for business logic state. Instead, define local scoped atoms inside the base map in `system/create-system`:
+```clojure
+{:approvals (atom {})
+ :cron-jobs (atom {})
+ :skill-stats (atom {})}
+```
+**Why Atom here?**: The `system` map is threaded immutably, but tools execute in parallel via `pmap`. If multiple tools simultaneously need to update stats, they would require complex pure-functional reduction over tool results. A local atom *inside* an immutable, session-bound map provides thread-safe concurrency without global state bleed.

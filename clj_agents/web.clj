@@ -10,18 +10,19 @@
    :headers {"Content-Type" "application/json"}
    :body (json/generate-string data)})
 
-(defn handler [req]
+(defn handler [system req]
   (let [{:keys [uri request-method]} req]
     (cond
       (and (= uri "/api/config") (= request-method :get))
       (json-response (config/load-config))
       
       (and (= uri "/api/jobs") (= request-method :get))
-      (json-response (vals @cron/job-store))
+      (let [job-store (get system :cron-jobs (atom {}))]
+        (json-response (vals @job-store)))
       
       :else
       {:status 404 :body "Not Found"})))
 
-(defn start-server! [port]
+(defn start-server! [system port]
   (println (str "Starting web server on port " port "..."))
-  (server/run-server handler {:port port}))
+  (server/run-server (partial handler system) {:port port}))

@@ -9,8 +9,6 @@
    [#"(?i)\b(curl|wget)\b.*\|\s*(ba)?sh\b" "pipe remote content to shell"]
    [#"(?i)\bgit\s+reset\s+--hard\b" "git reset --hard"]])
 
-(defonce session-approvals (atom {})) ;; {session-id #{description}}
-(defonce permanent-approvals (atom #{})) ;; Load from config in real system
 
 (defn detect-danger [command]
   (let [cmd-lower (str/lower-case command)]
@@ -35,16 +33,19 @@
       "a" :always
       :deny)))
 
-(defn check-permission [session-id command]
+(defn check-permission [system command]
   (if-let [desc (detect-danger command)]
-    (cond
-      (contains? (get @session-approvals session-id) desc) true
-      (contains? @permanent-approvals desc) true
-      (= "true" (System/getenv "HEADLESS")) (do (println "[SYSTEM] Headless mode: Auto-approving dangerous command.") true)
-      :else (let [choice (ask-user command desc)]
-              (case choice
-                :once true
-                :session (do (swap! session-approvals update session-id (fnil conj #{}) desc) true)
-                :always (do (swap! permanent-approvals conj desc) true)
-                false)))
+    (let [approvals-atom (get system :approvals (atom {}))
+          permanent-atom (atom #{}) ;; in a real system we would load from config
+          session-id (:id system)]
+      (cond
+        (contains? (get @approvals-atom session-id) desc) true
+        (contains? @permanent-atom desc) true
+        (= "true" (System/getenv "HEADLESS")) (do (println "[SYSTEM] Headless mode: Auto-approving dangerous command.") true)
+        :else (let [choice (ask-user command desc)]
+                (case choice
+                  :once true
+                  :session (do (swap! approvals-atom update session-id (fnil conj #{}) desc) true)
+                  :always (do (swap! permanent-atom conj desc) true)
+                  false))))
     true))

@@ -137,6 +137,12 @@
 - **Learning**: When adding config keys, always grep for all read-sites to ensure the key name is consistent. Key drift is invisible at runtime — the system "works" but isn't following config. Use a single `(def compression-config-defaults {:threshold_chars 25000})` pattern and reference it.
 - **Result**: Fixed both to use `:threshold_chars`. Compression threshold now respects `config.yaml` settings.
 
+### May 2026
+
+1. **Rich Hickey System Map Refactoring**: The transition from global atoms to a pure system map was initially incomplete. Auxiliary modules (`gateway`, `cron`, `permissions`, `skill`) were still using `defonce` global atoms (`active-sessions`, `job-store`, `session-approvals`, `usage-stats`). This complected the agent's logic with the underlying server environment, preventing true parallel agent execution or isolated benchmarking.
+   - **Fix**: Initialized scoped atoms (`:approvals`, `:cron-jobs`, `:skill-stats`) inside the `system` map in `create-system`. Threaded the `system` map through all auxiliary functions.
+   - **Lesson**: Global state is insidious. Even if the core loop uses pure functions, global variables in authorization or telemetry modules will eventually cause race conditions or memory leaks in long-running processes. Scoped local atoms within a system context map provide the exact same utility without the complecting downside.
+
 ## 79. Dead Code Accumulation from Incremental Chapter-Based Development
 - **Observation**: The `clj_agents/sNN_*.clj` files were "chapter demos" from the initial port phase — early standalone scripts that duplicated logic now living in the real production modules (`agent.clj`, `compression.clj`, etc.). They accumulated to 24 files with 20 associated dead test files, adding confusion and causing test failures when they referenced removed global APIs.
 - **Learning**: Chapter-based demo scripts should be deleted **immediately** after the real module is certified green. The signal to delete is: "does this file have a `(when (= *file* ...) ...)` main guard and does it require a module that is now a real production file?" If yes, delete it.

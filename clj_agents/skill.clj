@@ -44,36 +44,37 @@
       (str "# Available Skills (Top 10)\n"
            (str/join "\n" (for [s skills] (str "- " (:name s) ": " (:description s))))))))
 
-(defonce usage-stats (atom {}))
-
 (defn- get-stats-file []
   (io/file (get-skills-dir) "stats.json"))
 
-(defn load-stats! []
-  (let [f (get-stats-file)]
+(defn load-stats! [system]
+  (let [f (get-stats-file)
+        stats-atom (get system :skill-stats (atom {}))]
     (if (.exists f)
-      (reset! usage-stats (json/parse-string (slurp f) true))
-      (reset! usage-stats {}))))
+      (reset! stats-atom (json/parse-string (slurp f) true))
+      (reset! stats-atom {}))))
 
-(defn save-stats! []
-  (spit (get-stats-file) (json/generate-string @usage-stats)))
+(defn save-stats! [system]
+  (let [stats-atom (get system :skill-stats (atom {}))]
+    (spit (get-stats-file) (json/generate-string @stats-atom))))
 
-(defn track-usage! [name success?]
-  (load-stats!)
-  (let [stats (get @usage-stats (keyword name) {:hits 0 :successes 0})
+(defn track-usage! [system name success?]
+  (load-stats! system)
+  (let [stats-atom (get system :skill-stats (atom {}))
+        stats (get @stats-atom (keyword name) {:hits 0 :successes 0})
         new-stats (-> stats
                       (update :hits inc)
                       (update :successes (fn [s] (if success? (inc s) s))))]
-    (swap! usage-stats assoc (keyword name) new-stats)
-    (save-stats!)))
+    (swap! stats-atom assoc (keyword name) new-stats)
+    (save-stats! system)))
 
 ;; Tool Implementations
-(defn skill-view-tool [{:keys [name]}]
+(defn skill-view-tool [system {:keys [name]}]
   (let [skill-dir (io/file (get-skills-dir) name)
         skill-md (io/file skill-dir "SKILL.md")]
     (if (.exists skill-md)
       (let [{:keys [body]} (parse-skill-md (slurp skill-md))]
-        (track-usage! name false) ;; Increment hits, success will be verified post-task
+        (track-usage! system name false) ;; Increment hits, success will be verified post-task
         body)
       (str "Skill '" name "' not found."))))
 
@@ -108,7 +109,7 @@
   (-> system
       (registry/register
         {:name "skill_view"
-         :handler (fn [system args] (skill-view-tool (json/parse-string args true)))
+         :handler (fn [system args] (skill-view-tool system (json/parse-string args true)))
          :schema {:type "function"
                   :function {:name "skill_view"
                              :description "View the full content of a skill to follow its methodology."

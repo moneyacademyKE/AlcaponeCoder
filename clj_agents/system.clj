@@ -23,6 +23,9 @@
               :registry {}  ;; Plain map — not atom (pure system map pattern)
               :hooks (atom {})
               :plan-atom plan-atom ;; Mutable atom for set_plan tool cross-turn persistence
+              :approvals (atom {})
+              :cron-jobs (atom {})
+              :skill-stats (atom {})
               :state {:turns-since-memory 0
                       :iters-since-skill 0
                       :plan plan-atom} ;; prompt builder dereferences this
