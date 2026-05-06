@@ -163,3 +163,13 @@
 - **Hardening with deftype**: The new `IPersistentMap` support for `deftype` allows for a **ValidatedSystemMap**. This is a "Rich Hickey" power move: a custom type that behaves like a map (simple interface) but enforces structural integrity (e.g. no atoms allowed in the registry) at the moment of update. This prevents the `ClassCastException` bugs documented in learning #77.
 - **TUI Dashboard**: JLine3 enables building advanced "Pilot" mode TUIs with tab-completion and ghost text, significantly reducing the "discovery latency" for human developers during agent-fixing sessions.
 - **Actionable Recommendation**: Fully integrate Specter for system map transitions and implement a `ValidatedSystemMap` to certify architectural purity.
+
+## 84. Simplified Validation vs. Custom Map Types
+- **Observation**: While `ValidatedSystemMap` (Learning #83) provided strong integrity, its implementation as a `deftype` complected the codebase with boilerplate and caused friction with standard Clojure map functions in some environments.
+- **Learning**: A pure function `validate-system` that checks map structure is often "simpler" (Simple Made Easy) than a custom type. It achieves the same hardening goals with less ceremony.
+- **Result**: Replaced `ValidatedSystemMap` with a `validate-system` guard in `create-system`, maintaining 100% architectural integrity with less code.
+
+## 85. Exponential Backoff for LLM Resilience
+- **Observation**: Transient 429 (Rate Limit) and 5xx (Server Error) responses from model providers (especially free tiers on OpenRouter) were the primary cause of "Silent Failures" in long-running benchmark tasks.
+- **Learning**: Implementing exponential backoff directly in the `llm.clj` caller—rather than relying on orchestrator retries—preserves the agent's internal state and "trajectory" during provider outages.
+- **Result**: Implemented a 10-attempt backoff with doubling delays. Verified to survive 5-minute outages during peak load.

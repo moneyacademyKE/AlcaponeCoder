@@ -227,3 +227,13 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
      :budget 100}))
 ```
 **Benefit**: Guarantees system-wide architectural consistency. Achieves "Rich Hickey Certification" by making the system's "Self-Consistency" a property of the data structure itself.
+
+## Pattern 20: The Pure Validation Guard (De-complecting Integrity)
+**Context**: Custom types for validation can become "complected" with the platform's collection interfaces.
+**Solution**: Use a pure validation function `validate-system` called at the end of system initialization or state transition.
+**Benefit**: Full integrity checks without the overhead of custom types. Works seamlessly with all standard Clojure data processing functions.
+
+## Pattern 21: Localized Exponential Backoff
+**Context**: External service failures (LLM APIs) are a form of "noise" in the system's execution pipeline.
+**Solution**: Implement retry logic with exponential backoff as close to the I/O boundary as possible (in `llm.clj`).
+**Benefit**: Keeps the high-level agent loop clean and focused on reasoning, while the low-level "shell" handles the messy reality of network I/O.
