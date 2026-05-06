@@ -13,6 +13,27 @@ from datetime import datetime
 DATASET_PATH = Path("/tmp/harbor-framework/terminal-bench")
 HARBOR_DIR = Path("/tmp/harbor-framework")
 HERMES_LOG = Path.home() / ".hermes" / "hermes.log"
+LOCK_FILE = Path("/tmp/hermes_benchmark.lock")
+
+class PIDLock:
+    def __enter__(self):
+        if LOCK_FILE.exists():
+            try:
+                old_pid = int(LOCK_FILE.read_text().strip())
+                # Check if process actually exists
+                os.kill(old_pid, 0)
+                print(f"\033[91mError: Another instance (PID {old_pid}) is already running.\033[0m")
+                exit(1)
+            except (ProcessLookupError, ValueError):
+                # Process is gone, safe to take over
+                pass
+        
+        LOCK_FILE.write_text(str(os.getpid()))
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
 
 class Dashboard:
     def __init__(self, total):
@@ -110,7 +131,8 @@ def main():
     
     args = parser.parse_args()
 
-    if not DATASET_PATH.exists():
+    with PIDLock():
+        if not DATASET_PATH.exists():
         print(f"Dataset path {DATASET_PATH} not found.")
         return
 
