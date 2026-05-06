@@ -4,12 +4,12 @@
             [clj-yaml.core :as yaml]))
 
 (def default-config
-  {:models {:primary "tencent/hy3-preview:free"
+  {:models {:primary "meta-llama/llama-3.3-70b-instruct:free"
             :fallback "inclusionai/ling-2.6-1t:free"
             :auxiliary "inclusionai/ling-2.6-1t:free"}
    :base-url "https://openrouter.ai/api/v1"
    :api-key "${OPENAI_API_KEY}"
-   :agent {:max_turns 90 :max_tokens 4096}
+   :agent {:max_turns 90 :max_tokens 4096 :retry_limit 10}
    :compression {:enabled true :threshold_chars 25000}
    :memory {:enabled true :char_limit 8000}})
 
