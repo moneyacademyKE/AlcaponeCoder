@@ -27,6 +27,14 @@
       (throw (Exception. (str "System key :cron-jobs must be a Map, got: " (type cron-jobs)))))
     system))
 
+(defn cleanup [system]
+  (println "[SYSTEM] Cleaning up resources...")
+  (backend/cleanup (:env system))
+  (when-let [p @(:browser-process system)]
+    (println "[SYSTEM] Terminating browser daemon...")
+    (.destroy p))
+  (println "[SYSTEM] Cleanup complete."))
+
 (defn create-system [& {:keys [session-id config]}]
   (let [base {:id (or session-id (str (java.util.UUID/randomUUID)))
               :config (or config {})
@@ -62,11 +70,3 @@
                                            (store/save-checkpoint! sys)
                                            (cleanup sys))))
               sys)))))
-
-(defn cleanup [system]
-  (println "[SYSTEM] Cleaning up resources...")
-  (backend/cleanup (:env system))
-  (when-let [p @(:browser-process system)]
-    (println "[SYSTEM] Terminating browser daemon...")
-    (.destroy p))
-  (println "[SYSTEM] Cleanup complete."))
