@@ -99,11 +99,12 @@ During assembly, content from each source is collected into a list:
 ```python
 prompt_parts = [
     "You are a programming assistant...",     # Layer 1: Persona
-    "When you need to take action...",        # Layer 2: Behavioral guidance
-    "# Memory\nUser preferences...",          # Layer 3: Memory
-    "# Skills\nAvailable skills...",          # Layer 4: Skills
-    "# Project Context\nProject rules...",    # Layer 5: Project configuration
-    "Conversation started: ...",              # Layer 6: Timestamp
+    "# Current Plan & Status\n...",           # Layer 2: Current Plan
+    "When you need to take action...",        # Layer 3: Behavioral guidance
+    "# Memory\nUser preferences...",          # Layer 4: Memory
+    "# Skills\nAvailable skills...",          # Layer 5: Skills
+    "# Project Context\nProject rules...",    # Layer 6: Project configuration
+    "Current time: ...",                      # Layer 7: Timestamp
 ]
 ```
 
@@ -136,7 +137,7 @@ This prevents a massive AGENTS.md from consuming the entire context window.
 def load_soul():
     soul_path = HERMES_HOME / "SOUL.md"
     if soul_path.exists():
-        return soul_path.read_text()[:20000]
+        return soul_path.read_text()[:30000]
     return "You are a helpful assistant."
 ```
 
@@ -148,12 +149,12 @@ def load_project_context(cwd):
         # Search upward from cwd to git root
         path = find_up(cwd, name)
         if path:
-            return path.read_text()[:20000]
+            return path.read_text()[:30000]
     
     for name in ["AGENTS.md", "CLAUDE.md", ".cursorrules"]:
         path = Path(cwd) / name
         if path.exists():
-            return path.read_text()[:20000]
+            return path.read_text()[:30000]
     
     return ""
 ```

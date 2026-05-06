@@ -15,14 +15,18 @@
             (spit file new-content)
             (str "Successfully patched " path)))))))
 
-(registry/register!
- {:name "patch"
-  :handler (fn [args] (patch-tool (json/parse-string args true)))
-  :schema {:type "function"
-           :function {:name "patch"
-                      :description "Replace the first occurrence of a string in a file with another string. Useful for precise code fixes."
-                      :parameters {:type "object"
-                                   :properties {:path {:type "string" :description "Path to the file"}
-                                                :find {:type "string" :description "The exact string to find"}
-                                                :replace {:type "string" :description "The replacement string"}}
-                                   :required ["path" "find" "replace"]}}}})
+(defn register-tools [system]
+  (registry/register
+   system
+   {:name "patch"
+    :handler (fn [system args] (patch-tool (json/parse-string args true)))
+    :schema {:type "function"
+             :function {:name "patch"
+                        :description "Replace the first occurrence of a string in a file with another string. Useful for precise code fixes."
+                        :parameters {:type "object"
+                                     :properties {:path {:type "string" :description "Path to the file"}
+                                                  :find {:type "string" :description "The exact string to find"}
+                                                  :replace {:type "string" :description "The replacement string"}}
+                                     :required ["path" "find" "replace"]}}}}))
+
+(defn register-tools! [system] (register-tools system)) ;; legacy alias

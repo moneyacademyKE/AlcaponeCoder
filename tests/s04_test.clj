@@ -16,19 +16,21 @@
     (io/delete-file "AGENTS.md"))
 
   (testing "Prompt assembly layers"
-    (let [p (prompt/build-system-prompt {:soul "Identity"
-                                         :memory "Preferences"
-                                         :project-context "Rules"})]
+    (let [sys {:depth 0}
+          p (prompt/build-system-prompt sys {:soul "Identity"
+                                             :memory "Preferences"
+                                             :project-context "Rules"})]
       (is (str/includes? p "Identity"))
       (is (str/includes? p "# Memory\nPreferences"))
       (is (str/includes? p "# Project Context\nRules"))
       (is (str/includes? p "Current time:"))))
 
   (testing "Truncation"
-    (let [long-str (str/join "" (repeat 21000 "a"))]
+    ;; load-project-context uses 30000 char limit — create 31000 to trigger truncation
+    (let [long-str (str/join "" (repeat 31000 "a"))]
       (spit "HERMES.md" long-str)
       (let [ctx (prompt/load-project-context ".")]
-        (is (<= (count ctx) 20500)) ;; max-chars + truncated message
+        (is (<= (count ctx) 30100)) ;; 30000 + "\n\n[...truncated...]" overhead
         (is (str/includes? ctx "[...truncated...]")))
       (io/delete-file "HERMES.md"))))
 

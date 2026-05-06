@@ -1,0 +1,7 @@
+{
+  "name": "hermes-browser-driver",
+  "version": "1.0.0",
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

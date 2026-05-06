@@ -193,27 +193,32 @@ All model providers are accessed through this single client. Switching models on
 
 ```python
 ```clojure
-(defn run-conversation [session-id user-instruction state-atom]
-  (let [system-prompt (prompt/build-system-prompt {:soul (prompt/load-soul)})
-        initial-messages [{:role "user" :content user-instruction}]]
+(defn run-conversation [system initial-messages]
+  (let [plan-atom (get @(:state system) :plan)
+        system-prompt (prompt/build-system-prompt system
+                                                 {:soul (prompt/load-soul)
+                                                  :plan @plan-atom
+                                                  :memory (memory/format-for-system-prompt "memory")
+                                                  :skills (skill/get-skill-index-prompt)})]
     (loop [messages initial-messages
            turn 0]
-      (if (>= turn @registry/*budget*)
+      (if (>= turn (get-in system [:config :agent :max_turns]))
         {:final-response "Reached maximum iteration count" :messages messages}
-        (let [response (llm/call-model messages system-prompt registry/*config*)]
+        (let [response (llm/call-with-fallback system messages system-prompt)]
           (if (= :error (:status response))
             (handle-error response)
             (let [assistant-msg (get-in response [:data :choices 0 :message])
                   new-messages (conj messages assistant-msg)]
               (if-not (:tool_calls assistant-msg)
                 {:final-response (:content assistant-msg) :messages new-messages}
-                (let [tool-results (for [tc (:tool_calls assistant-msg)]
-                                     (let [tool-name (get-in tc [:function :name])
-                                           tool-args (get-in tc [:function :arguments])
-                                           result (registry/dispatch tool-name tool-args)]
-                                       {:role "tool"
-                                        :tool_call_id (:id tc)
-                                        :content result}))]
+                (let [tool-results (doall (pmap (fn [tc] 
+                                                  (let [tool-name (get-in tc [:function :name])
+                                                        tool-args (get-in tc [:function :arguments])
+                                                        result (registry/dispatch system tool-name tool-args)]
+                                                    {:role "tool"
+                                                     :tool_call_id (:id tc)
+                                                     :content result}))
+                                                (:tool_calls assistant-msg)))]
                   (recur (into new-messages tool-results) (inc turn))))))))))
 ```
 

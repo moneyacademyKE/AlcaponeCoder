@@ -3,12 +3,14 @@
             [cheshire.core :as json]
             [babashka.http-client :as http]))
 
+(defn count-chars [messages]
+  (reduce (fn [acc msg]
+            (+ acc (count (str (:content msg)))
+               (count (str (:tool_calls msg)))))
+          0 messages))
+
 (defn estimate-tokens [messages]
-  (let [total-chars (reduce (fn [acc msg]
-                              (+ acc (count (str (:content msg)))
-                                 (count (str (:tool_calls msg)))))
-                            0 messages)]
-    (Math/ceil (/ total-chars 3.5))))
+  (Math/ceil (/ (count-chars messages) 3.5)))
 
 (defn prune-old-tool-results [messages keep-recent]
   (let [tool-indices (keep-indexed (fn [idx msg] (when (= (:role msg) "tool") idx)) messages)
@@ -23,21 +25,21 @@
           (range (count messages))
           messages)))
 
-(defn find-boundaries [messages protect-first tail-token-budget]
+(defn find-boundaries [messages protect-first tail-char-budget]
   (let [head-end (min protect-first (count messages))
         reversed-messages (reverse (subvec messages head-end))
         tail-indices (loop [msgs reversed-messages
-                            acc-tokens 0
+                            acc-chars 0
                             indices []
                             idx-from-end 0]
                        (if (empty? msgs)
                          indices
                          (let [msg (first msgs)
-                               tokens (estimate-tokens [msg])]
-                           (if (> (+ acc-tokens tokens) tail-token-budget)
+                               chars (count-chars [msg])]
+                           (if (> (+ acc-chars chars) tail-char-budget)
                              indices
                              (recur (rest msgs)
-                                    (+ acc-tokens tokens)
+                                    (+ acc-chars chars)
                                     (conj indices (- (count messages) 1 idx-from-end))
                                     (inc idx-from-end))))))]
     (let [tail-start (if (empty? tail-indices) (count messages) (apply min tail-indices))]
@@ -54,10 +56,10 @@
 (defn should-compress? [messages threshold-tokens]
   (> (estimate-tokens messages) threshold-tokens))
 
-(defn compress [messages {:keys [protect-first tail-token-budget call-llm-fn]}]
+(defn compress [messages {:keys [protect-first tail-char-budget call-llm-fn]}]
   (let [;; Aggressively prune old tool results first (keep only 2)
         pruned (prune-old-tool-results messages 2)
-        [head-end tail-start] (find-boundaries pruned protect-first tail-token-budget)]
+        [head-end tail-start] (find-boundaries pruned protect-first tail-char-budget)]
     (if (>= head-end tail-start)
       pruned ;; Nothing to compress in the middle
       (let [middle (subvec pruned head-end tail-start)

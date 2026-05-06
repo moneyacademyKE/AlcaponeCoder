@@ -38,10 +38,10 @@
            :path (.getAbsolutePath skill-dir)})))))
 
 (defn get-skill-index-prompt []
-  (let [skills (remove nil? (list-skills))]
+  (let [skills (take 10 (remove nil? (list-skills)))]
     (if (empty? skills)
       nil
-      (str "# Available Skills\n"
+      (str "# Available Skills (Top 10)\n"
            (str/join "\n" (for [s skills] (str "- " (:name s) ": " (:description s))))))))
 
 (defonce usage-stats (atom {}))
@@ -104,26 +104,28 @@
       
       (str "Unknown action: " action))))
 
-;; Register the tools
-(registry/register!
-  {:name "skill_view"
-   :handler (fn [args] (skill-view-tool (json/parse-string args true)))
-   :schema {:type "function"
-            :function {:name "skill_view"
-                       :description "View the full content of a skill to follow its methodology."
-                       :parameters {:type "object"
-                                    :properties {:name {:type "string" :description "The name of the skill"}}
-                                    :required ["name"]}}}})
+(defn register-tools [system]
+  (-> system
+      (registry/register
+        {:name "skill_view"
+         :handler (fn [system args] (skill-view-tool (json/parse-string args true)))
+         :schema {:type "function"
+                  :function {:name "skill_view"
+                             :description "View the full content of a skill to follow its methodology."
+                             :parameters {:type "object"
+                                          :properties {:name {:type "string" :description "The name of the skill"}}
+                                          :required ["name"]}}}})
+      (registry/register
+        {:name "skill_manage"
+         :handler (fn [system args] (skill-manage-tool (json/parse-string args true)))
+         :schema {:type "function"
+                  :function {:name "skill_manage"
+                             :description "Create, edit, or delete skills based on experience."
+                             :parameters {:type "object"
+                                          :properties {:action {:type "string" :enum ["create" "edit" "delete"]}
+                                                       :name {:type "string" :description "The name of the skill"}
+                                                       :description {:type "string" :description "Short description (for create/edit)"}
+                                                       :content {:type "string" :description "The full SKILL.md body content (for create/edit)"}}
+                                          :required ["action" "name"]}}}})))
 
-(registry/register!
-  {:name "skill_manage"
-   :handler (fn [args] (skill-manage-tool (json/parse-string args true)))
-   :schema {:type "function"
-            :function {:name "skill_manage"
-                       :description "Create, edit, or delete skills based on experience."
-                       :parameters {:type "object"
-                                    :properties {:action {:type "string" :enum ["create" "edit" "delete"]}
-                                                 :name {:type "string" :description "The name of the skill"}
-                                                 :description {:type "string" :description "Short description (for create/edit)"}
-                                                 :content {:type "string" :description "The full SKILL.md body content (for create/edit)"}}
-                                    :required ["action" "name"]}}}})
+(defn register-tools! [system] (register-tools system)) ;; legacy alias

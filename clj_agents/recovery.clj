@@ -29,7 +29,7 @@
       {:reason :model-not-found :retryable false :should-compress false :should-fallback true}
       
       :else
-      {:reason :unknown :retryable (>= status-code 500) :should-compress false :should-fallback false})))
+      {:reason :unknown :retryable (>= (or status-code 0) 500) :should-compress false :should-fallback false})))
 
 (defn jittered-backoff [attempt]
   (let [base-delay 2000 ;; 2 seconds

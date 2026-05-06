@@ -162,7 +162,11 @@ These five decisions are the keys to understanding the system. Without grasping 
 
 ### 1. Simple Made Easy: De-complecting State from Logic
 
-Following Rich Hickey's philosophy, Hermes Agent separates "what happens" (pure logic) from "where it happens" (execution context). By using Clojure's immutable data structures and atoms, we eliminate entire classes of race conditions and state-rot bugs common in complex agent loops.
+Following Rich Hickey's philosophy, Hermes Agent separates "what happens" (pure logic) from "where it happens" (execution context). By using a **System Map** as the single source of truth passed through every function, we eliminate entire classes of race conditions and state-rot bugs. Global atoms are minimized; every tool and service is an explicit dependency in the system map.
+
+### 2. Parallel Tool Dispatch & Thread-Safety
+
+Modern agents often call multiple independent tools in a single turn. Hermes Agent uses `pmap` to parallelize these calls, significantly reducing latency. To maintain stability, shared resources (like the Browser Daemon) are protected by explicit **locks** within the Clojure handlers, ensuring that concurrent executions don't interleave their I/O streams.
 
 ### 2. Why Use the OpenAI SDK as the Only API Client
 

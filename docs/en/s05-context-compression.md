@@ -149,11 +149,11 @@ This is Layer 1. No LLM needed, pure string replacement, but it can eliminate a 
 {
     "head_end": 3,        # First 3 messages stay untouched
     "tail_start": 85,     # From message 85 onward is the tail, stays untouched
-    "middle": [3:85],     # These in the middle are to be compressed
+    "tail_char_budget": 10000, # Tail is roughly 10,000 characters
 }
 ```
 
-The tail is not a fixed "last N messages" -- it is calculated by token budget (approximately 20K tokens). This keeps the preserved information roughly stable regardless of how long or short recent messages are.
+The tail is not a fixed "last N messages" -- it is calculated by character budget (10,000 characters). This keeps the preserved information roughly stable regardless of how long or short recent messages are.
 
 ### 3. Post-compression summary message
 
@@ -186,17 +186,17 @@ The key idea behind this step:
 ### Step 2: Find the compression boundaries
 
 ```python
-def find_boundaries(messages, protect_first, tail_token_budget):
+def find_boundaries(messages, protect_first, tail_char_budget):
     head_end = protect_first
     
-    # Count backward from the end, accumulating up to tail_token_budget
+    # Count backward from the end, accumulating up to tail_char_budget
     tail_start = len(messages)
-    tail_tokens = 0
+    tail_chars = 0
     for i in range(len(messages) - 1, head_end - 1, -1):
-        msg_tokens = len(str(messages[i].get("content", ""))) // 4
-        if tail_tokens + msg_tokens > tail_token_budget:
+        msg_chars = len(str(messages[i].get("content", "")))
+        if tail_chars + msg_chars > tail_char_budget:
             break
-        tail_tokens += msg_tokens
+        tail_chars += msg_chars
         tail_start = i
     
     return head_end, tail_start
@@ -248,8 +248,8 @@ def compress(messages, protect_first, tail_token_budget):
 
 ```python
 # At the top of the loop in run_conversation()
-if estimate_tokens(messages) >= threshold:
-    messages = compress(messages, protect_first=3, tail_token_budget=20000)
+if count_chars(messages) >= 25000:
+    messages = compress(messages, protect_first=3, tail_char_budget=10000)
 ```
 
 Starting from this chapter, the main loop is no longer just about "call the model + run tools." It takes on an additional responsibility: **managing the active context budget.**

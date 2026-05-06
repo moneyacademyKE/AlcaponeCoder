@@ -12,7 +12,7 @@ HARBOR_DIR = Path("/tmp/harbor-framework")
 def main():
     parser = argparse.ArgumentParser(description="Queue Harbor benchmark tasks to avoid API rate limits.")
     parser.add_argument("--delay", type=int, default=60, help="Delay in seconds between tasks.")
-    parser.add_argument("--model", type=str, default="tencent/hy3-preview:free", help="Model to use for the benchmark.")
+    parser.add_argument("--model", type=str, default="meta-llama/llama-3.3-70b-instruct:free", help="Model to use for the benchmark.")
     parser.add_argument("--agent", type=str, default="hermes-bb", help="Agent adapter to use.")
     
     args = parser.parse_args()

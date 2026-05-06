@@ -6,27 +6,37 @@
             [permissions]
             [backend]))
 
-(defn handler [arguments]
+(defn handler [system arguments]
   (let [args (json/parse-string arguments true)
         command (:command args)]
-    (if-not (permissions/check-permission registry/*session-id* command)
-      (json/generate-string {:error (str "Permission denied for command: " command)})
+    (if-not (permissions/check-permission (:id system) command)
+      (json/generate-string {:status "error" :message (str "Permission denied for command: " command)})
       (try
-        (let [{:keys [out err]} (backend/run-bash registry/*env* command)]
-          (let [output (str out err)]
-            (if (empty? output)
-              "(no output)"
-              (subs output 0 (min (count output) 10000)))))
+        (let [res (backend/run-bash (:env system) command)
+              stdout (:out res)
+              stderr (:err res)
+              exit-code (:exit res)
+              truncated-stdout (if (> (count stdout) 5000) (str (subs stdout 0 5000) "\n... (truncated)") stdout)
+              truncated-stderr (if (> (count stderr) 2000) (str (subs stderr 0 2000) "\n... (truncated)") stderr)]
+          (json/generate-string 
+           {:exit_code exit-code
+            :stdout truncated-stdout
+            :stderr truncated-stderr
+            :metadata {:type (:type res) :duration (:duration res)}}))
         (catch Exception e
-          (str "(error: " (ex-message e) ")"))))))
+          (json/generate-string {:status "error" :message (ex-message e)}))))))
 
-(registry/register!
- {:name "terminal"
-  :handler handler
-  :schema {:type "function"
-           :function {:name "terminal"
-                      :description "Run a shell command and return its output."
-                      :parameters {:type "object"
-                                   :properties {:command {:type "string"
-                                                          :description "The shell command to execute"}}
-                                   :required ["command"]}}}})
+(defn register-tools [system]
+  (registry/register
+    system
+    {:name "terminal"
+     :handler handler
+     :schema {:type "function"
+              :function {:name "terminal"
+                         :description "Run a shell command and return its output."
+                         :parameters {:type "object"
+                                      :properties {:command {:type "string"
+                                                             :description "The shell command to execute"}}
+                                      :required ["command"]}}}}))
+
+(defn register-tools! [system] (register-tools system)) ;; legacy alias

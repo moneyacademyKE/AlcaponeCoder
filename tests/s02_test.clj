@@ -1,36 +1,44 @@
 (ns s02-test
   (:require [clojure.test :refer [deftest is testing run-tests]]
             [registry]
-            [s02-tool-system :as agent]
             [cheshire.core :as json]))
 
+;; s02-test: Updated for System Map architecture.
+;; The old global-atom API (registry/tools) is replaced by system-map registry.
+
+(defn make-test-system []
+  {:id "test" :config {} :budget 10 :registry {}
+   :state {:turns-since-memory 0 :iters-since-skill 0 :plan "test"}})
+
 (deftest test-tool-registry
-  (testing "Tool self-registration"
-    (is (contains? @registry/tools "terminal")))
-  
+  (testing "Tool registration into system map"
+    (let [sys (make-test-system)
+          sys (registry/register sys {:name "terminal"
+                                      :handler (fn [s args] "result")
+                                      :schema {:type "function"
+                                               :function {:name "terminal"
+                                                          :parameters {:type "object" :properties {}}}}})]
+      (is (contains? (:registry sys) "terminal"))))
+
   (testing "Get definitions returns valid schema"
-    (let [defs (registry/get-definitions)]
+    (let [sys (make-test-system)
+          sys (registry/register sys {:name "terminal"
+                                      :handler (fn [s args] "ok")
+                                      :schema {:type "function"
+                                               :function {:name "terminal"
+                                                          :parameters {:type "object" :properties {}}}}})
+          defs (registry/get-definitions sys)]
       (is (seq defs))
       (is (= "terminal" (get-in (first defs) [:function :name])))))
 
   (testing "Dispatch routes to correct handler"
-    (with-redefs [registry/tools (atom {"terminal" {:handler (fn [args] (let [a (json/parse-string args true)] (:command a)))}})]
-      (let [result (registry/dispatch "terminal" (json/generate-string {:command "echo test"}))]
-        (is (clojure.string/includes? result "test"))))))
-
-(deftest test-agent-loop-with-registry
-  (testing "Loop uses registry for tools"
-    (let [responses [{:choices [{:message {:content nil
-                                          :tool_calls [{:id "call_1"
-                                                        :function {:name "terminal"
-                                                                   :arguments (json/generate-string {:command "echo agent"})}}]}}]}
-                     {:choices [{:message {:content "Done" :tool_calls nil}}]}]
-          ptr (atom 0)
-          mock-call (fn [_] (let [res (nth responses @ptr)] (swap! ptr inc) res))]
-      (with-redefs [agent/call-model mock-call]
-        (let [result (agent/run-conversation "Run echo")]
-          (is (= "Done" (:final-response result)))
-          (is (= 4 (count (:messages result)))))))))
+    (let [sys (make-test-system)
+          sys (registry/register sys {:name "echo"
+                                      :handler (fn [s args]
+                                                 (let [a (json/parse-string args true)]
+                                                   (:command a)))})
+          result (registry/dispatch sys "echo" (json/generate-string {:command "hello"}))]
+      (is (= "hello" result)))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (let [results (run-tests)]

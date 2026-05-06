@@ -50,11 +50,11 @@
      \"reasoning\": \"Brief explanation of your decision, noting if success was empirically verified.\"
    }")
 
-(defn judge-skill [skill messages]
+(defn judge-skill [system skill messages]
   (println (str "[JUDGE] Auditing skill: " (:name skill)))
   (let [prompt (str judge-skill-prompt "\n\nPROPOSED SKILL:\n" (json/generate-string skill) 
                     "\n\nTRAJECTORY:\n" (str/join "\n" (map :content (take-last 20 messages))))
-        response-str (llm/call-fallback-llm prompt)
+        response-str (llm/call-fallback-llm system prompt)
         decision (try (json/parse-string response-str true) (catch Exception _ {:decision "REJECT" :reasoning "Failed to parse judge response"}))]
     (if (= "VERIFY" (:decision decision))
       (do 
@@ -62,11 +62,11 @@
         (skill/skill-manage-tool {:action "edit" :name (:name skill) :status "verified" :content (:content skill)}))
       (println (str "[JUDGE] ❌ REJECTED: " (:name skill) " - " (:reasoning decision))))))
 
-(defn review-trajectory [messages]
+(defn review-trajectory [system messages]
   (println "[REVIEWER] Analyzing trajectory for new skills...")
   (let [history-text (str/join "\n" (map #(str (:role %) ": " (:content %) (when (:tool_calls %) (str "\n[tools] " (json/generate-string (:tool_calls %))))) messages))
         full-prompt (str extract-skills-prompt "\n\nCONVERSATION TRAJECTORY:\n" history-text)
-        response-str (llm/call-auxiliary-llm full-prompt)]
+        response-str (llm/call-auxiliary-llm system full-prompt)]
     
     ;; Post-Implementation Usage Audit
     (let [viewed-skills (->> messages
@@ -86,7 +86,7 @@
           (println (str "[REVIEWER] Proposing new skill: " (:name s)))
           (skill/skill-manage-tool (assoc s :status "draft"))
           ;; Autonomous RL-as-Judge Verification
-          (judge-skill s messages))
+          (judge-skill system s messages))
         (count (:proposed_skills parsed)))
       (catch Exception e
         (println "[REVIEWER] Failed to parse proposed skills:" (ex-message e))

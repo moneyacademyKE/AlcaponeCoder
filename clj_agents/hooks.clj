@@ -1,17 +1,15 @@
 (ns hooks)
 
-(def handlers (atom {}))
+(defn register! [system event-type handler-fn]
+  (let [h-atom (get system :hooks (atom {}))]
+    (swap! h-atom update event-type (fnil conj []) handler-fn)
+    system))
 
-(defn register! [event-type handler-fn]
-  (swap! handlers update event-type (fnil conj []) handler-fn))
-
-(defn emit! [event-type context]
-  (let [fns (get @handlers event-type)]
+(defn emit! [system event-type context]
+  (let [h-atom (get system :hooks (atom {}))
+        fns (get @h-atom event-type)]
     (doseq [f fns]
       (try
-        (f event-type context)
+        (f system event-type context)
         (catch Exception e
           (println (str "[HOOK-ERROR] " event-type ": " (ex-message e))))))))
-
-(defn clear! []
-  (reset! handlers {}))

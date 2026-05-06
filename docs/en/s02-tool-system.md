@@ -43,21 +43,23 @@ Each tool file calls `register()` at the end:
   (:require [registry]
             [backend]))
 
-(defn handler [arguments]
+(defn handler [system arguments]
   (let [args (json/parse-string arguments true)
-        command (:command args)]
-    (let [{:keys [out err]} (backend/run-bash registry/*env* command)]
+        command (:command args)
+        env (:env system)]
+    (let [{:keys [out err]} (backend/run-bash env command)]
       (str out err))))
 
-(registry/register!
- {:name "terminal"
-  :handler handler
-  :schema {:type "function"
-           :function {:name "terminal"
-                      :description "Run a shell command"
-                      :parameters {:type "object"
-                                   :properties {:command {:type "string"}}
-                                   :required ["command"]}}}})
+(defn register-tools! [system]
+  (registry/register! system
+   {:name "terminal"
+    :handler handler
+    :schema {:type "function"
+             :function {:name "terminal"
+                        :description "Run a shell command"
+                        :parameters {:type "object"
+                                     :properties {:command {:type "string"}}
+                                     :required ["command"]}}}}))
 ```
 
 ### 2. The Orchestration Layer Triggers Discovery

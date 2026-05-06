@@ -19,23 +19,26 @@
     (spit path text) ;; In reality, this would be audio data
     (json/generate-string {:result (str "MEDIA:" path)})))
 
-(registry/register!
- {:name "vision_analyze"
-  :handler vision-analyze-handler
-  :schema {:type "function"
-           :function {:name "vision_analyze"
-                      :description "Analyze an image and answer questions about it."
-                      :parameters {:type "object"
-                                   :properties {:image_url {:type "string"}
-                                                :question {:type "string"}}
-                                   :required ["image_url" "question"]}}}})
+(defn register-tools [system]
+  (-> system
+      (registry/register
+       {:name "vision_analyze"
+        :handler (fn [system arguments] (vision-analyze-handler arguments))
+        :schema {:type "function"
+                 :function {:name "vision_analyze"
+                            :description "Analyze an image and answer questions about it."
+                            :parameters {:type "object"
+                                         :properties {:image_url {:type "string"}
+                                                      :question {:type "string"}}
+                                         :required ["image_url" "question"]}}}})
+      (registry/register
+       {:name "text_to_speech"
+        :handler (fn [system arguments] (tts-handler arguments))
+        :schema {:type "function"
+                 :function {:name "text_to_speech"
+                            :description "Convert text to a voice message."
+                            :parameters {:type "object"
+                                         :properties {:text {:type "string"}}
+                                         :required ["text"]}}}})))
 
-(registry/register!
- {:name "text_to_speech"
-  :handler tts-handler
-  :schema {:type "function"
-           :function {:name "text_to_speech"
-                      :description "Convert text to a voice message."
-                      :parameters {:type "object"
-                                   :properties {:text {:type "string"}}
-                                   :required ["text"]}}}})
+(defn register-tools! [system] (register-tools system)) ;; legacy alias

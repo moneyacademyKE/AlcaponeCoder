@@ -4,14 +4,14 @@
             [clj-yaml.core :as yaml]))
 
 (def default-config
-  {:model "tencent/hy3-preview:free"
+  {:models {:primary "minimax/minimax-m2.5:free"
+            :fallback "poolside/laguna-m.1:free"
+            :auxiliary "minimax/minimax-m2.5:free"}
    :base-url "https://openrouter.ai/api/v1"
    :api-key "${OPENAI_API_KEY}"
    :agent {:max_turns 90 :max_tokens 4096}
-   :fallback-model "inclusionai/ling-2.6-1t:free"
-   :compression {:enabled true :threshold_tokens 20000}
-   :memory {:enabled true :char_limit 8000}
-   :delegation {:max_iterations 50}})
+   :compression {:enabled true :threshold_chars 25000}
+   :memory {:enabled true :char_limit 8000}})
 
 (defn get-hermes-home []
   (let [env-home (System/getenv "HERMES_HOME")

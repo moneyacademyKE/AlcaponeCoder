@@ -23,6 +23,10 @@
     ;; 1. Initialize
     (send-rpc! out "initialize" {:protocolVersion "2024-11-05" :capabilities {} :clientInfo {:name "hermes-clj"}} 1)
     (read-rpc! in)
+    ;; 2. Notify initialized
+    (let [msg (json/generate-string {:jsonrpc "2.0" :method "notifications/initialized" :params {}})]
+      (.write out (str msg "\n"))
+      (.flush out))
     (->MCPServer server-name p in out)))
 
 (defn list-tools [server]
@@ -36,13 +40,14 @@
       (throw (Exception. (str "MCP Error: " (:error res))))
       (str/join "\n" (map :text (get-in res [:result :content]))))))
 
-(defn register-mcp-tools! [server]
+(defn register-mcp-tools! [system server]
   (let [tools (list-tools server)]
     (doseq [t tools]
       (let [prefixed-name (str "mcp_" (:name server) "_" (:name t))]
         (registry/register!
+         system
          {:name prefixed-name
-          :handler (fn [args]
+          :handler (fn [system args]
                      (let [parsed-args (json/parse-string args true)]
                        (call-tool server (:name t) parsed-args)))
           :schema {:type "function"

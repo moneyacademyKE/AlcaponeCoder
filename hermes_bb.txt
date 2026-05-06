@@ -1,0 +1,92 @@
+[INFO] :llm_call - {"model":"anthropic/claude-sonnet-4","role":"primary"}
+[WARN] :auto_heal - {"target":"fallback"}
+[INFO] :llm_call - {"model":"anthropic/claude-sonnet-4","role":"fallback"}
+[INFO] tool_registered - {"name":"memory"}
+[INFO] tool_registered - {"name":"skill_view"}
+[INFO] tool_registered - {"name":"skill_manage"}
+[INFO] tool_registered - {"name":"delegate_task"}
+[INFO] tool_registered - {"name":"terminal"}
+[INFO] tool_registered - {"name":"browser_navigate"}
+[INFO] tool_registered - {"name":"browser_snapshot"}
+[INFO] tool_registered - {"name":"browser_click"}
+[INFO] tool_registered - {"name":"browser_type"}
+[INFO] tool_registered - {"name":"set_plan"}
+[INFO] tool_registered - {"name":"patch"}
+[INFO] tool_registered - {"name":"vision_analyze"}
+[INFO] tool_registered - {"name":"text_to_speech"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_call_start - {"name":"terminal","args":"{\"command\": \"grep -rl 'register!' clj_agents/\"}"}
+[INFO] tool_call_end - {"name":"terminal"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_registered - {"name":"memory"}
+[INFO] tool_registered - {"name":"skill_view"}
+[INFO] tool_registered - {"name":"skill_manage"}
+[INFO] tool_registered - {"name":"delegate_task"}
+[INFO] tool_registered - {"name":"terminal"}
+[INFO] tool_registered - {"name":"browser_navigate"}
+[INFO] tool_registered - {"name":"browser_snapshot"}
+[INFO] tool_registered - {"name":"browser_click"}
+[INFO] tool_registered - {"name":"browser_type"}
+[INFO] tool_registered - {"name":"set_plan"}
+[INFO] tool_registered - {"name":"patch"}
+[INFO] tool_registered - {"name":"vision_analyze"}
+[INFO] tool_registered - {"name":"text_to_speech"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_call_start - {"name":"terminal","args":"{\"command\": \"grep -rl \\\"register!\\\" clj_agents/\"}"}
+[INFO] tool_call_end - {"name":"terminal"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_registered - {"name":"memory"}
+[INFO] tool_registered - {"name":"skill_view"}
+[INFO] tool_registered - {"name":"skill_manage"}
+[INFO] tool_registered - {"name":"delegate_task"}
+[INFO] tool_registered - {"name":"terminal"}
+[INFO] tool_registered - {"name":"browser_navigate"}
+[INFO] tool_registered - {"name":"browser_snapshot"}
+[INFO] tool_registered - {"name":"browser_click"}
+[INFO] tool_registered - {"name":"browser_type"}
+[INFO] tool_registered - {"name":"set_plan"}
+[INFO] tool_registered - {"name":"patch"}
+[INFO] tool_registered - {"name":"vision_analyze"}
+[INFO] tool_registered - {"name":"text_to_speech"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_call_start - {"name":"terminal","args":"{\"command\": \"grep -rl 'register!' clj_agents/\"}"}
+[INFO] tool_call_end - {"name":"terminal"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_call_start - {"name":"memory","args":"{\"action\": \"read\"}"}
+[INFO] tool_call_end - {"name":"memory"}
+[INFO] tool_call_start - {"name":"memory","args":"{\"action\": \"add\", \"content\": \"Project uses Babashka with OpenRouter\"}"}
+[INFO] tool_call_end - {"name":"memory"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_call_start - {"name":"memory","args":"{\"action\": \"search\", \"content\": \"Babashka\"}"}
+[INFO] tool_call_end - {"name":"memory"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_call_start - {"name":"terminal","args":"{\"command\": \"cat broken_script.py\"}"}
+[INFO] tool_call_end - {"name":"terminal"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_call_start - {"name":"terminal","args":"{\"command\": \"python3 broken_script.py 2>&1\"}"}
+[INFO] tool_call_end - {"name":"terminal"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_call_start - {"name":"patch","args":"{\"path\": \"broken_script.py\", \"find\": \"print('Hello' + 123)\", \"replace\": \"print('Hello 123')\"}"}
+[INFO] tool_call_end - {"name":"patch"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] tool_call_start - {"name":"terminal","args":"{\"command\": \"python3 broken_script.py\"}"}
+[INFO] tool_call_end - {"name":"terminal"}
+[INFO] :llm_call - {"model":"tencent/hy3-preview:free","role":"primary"}
+[INFO] :llm_call - {"model":"inclusionai/ling-2.6-1t:free","role":"auxiliary"}
+[INFO] tool_registered - {"name":"test-tool"}
+[INFO] tool_registered - {"name":"test-tool"}
+[INFO] tool_registered - {"name":"test-tool"}
+[WARN] :api_retry - {"attempt":1,"reason":"server-error"}
+[WARN] :api_retry - {"attempt":2,"reason":"server-error"}
+[WARN] :api_retry - {"attempt":3,"reason":"server-error"}
+[INFO] tool_registered - {"name":"test-tool"}
+[WARN] :auto_heal - {"target":"fallback","reason":"auth","message":"Unauthorized"}
+[INFO] tool_registered - {"name":"test-tool"}
+[WARN] :auto_heal - {"target":"fallback","reason":"auth","message":"Unauthorized"}
+[INFO] harbor_start - {"instruction":null}
+[ERROR] harbor_fatal - {"message":"Fatal Harbor Runner Error: clojure.lang.Atom cannot be cast to clojure.lang.Associative"}
+[WARN] :auto_heal - {"target":"fallback","reason":"auth","message":"Unauthorized"}
+[WARN] :auto_heal - {"target":"fallback","reason":"auth","message":"Unauthorized"}
+[INFO] tool_registered - {"name":"test-tool"}

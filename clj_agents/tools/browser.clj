@@ -1,76 +1,103 @@
 (ns tools.browser
   (:require [cheshire.core :as json]
             [clojure.string :as str]
+            [babashka.process :refer [shell]]
             [registry]))
 
-(defonce browser-state (atom {:url nil :snapshot nil :cookies {}}))
+(defn- get-or-start-driver! [system]
+  (let [browser-atom (get system :browser-process (atom nil))]
+    (if-let [p @browser-atom]
+      p
+      (let [p (babashka.process/process ["node" "scripts/browser_driver_daemon.js"] {:in :pipe :out :pipe :err :inherit})]
+        (reset! browser-atom p)
+        p))))
 
-(defn- get-mock-snapshot [url]
-  (cond
-    (str/includes? url "github.com")
-    "navigation \"GitHub\"\n  link \"Sign in\" [ref=e1]\n  link \"Sign up\" [ref=e2]\n  search \"Search GitHub\" [ref=e3]\n  heading \"Let's build from here\" [level=1]"
-    
-    (str/includes? url "google.com")
-    "navigation \"Google\"\n  search \"Search\" [ref=e1]\n  button \"Google Search\" [ref=e2]\n  button \"I'm Feeling Lucky\" [ref=e3]"
-    
-    :else
-    (str "navigation \"" url "\"\n  text \"Page loaded successfully.\"")))
+(defn- run-driver [system action & args]
+  (let [p (get-or-start-driver! system)
+        payload (apply assoc {:action action} args)
+        in (:in p)
+        out (:out p)]
+    (locking p
+      (.write (clojure.java.io/writer in) (str (json/generate-string payload) "\n"))
+      (.flush (clojure.java.io/writer in))
+      (let [line (.readLine (clojure.java.io/reader out))]
+        (if line
+          (let [data (json/parse-string line true)]
+            (if (= "ok" (:status data))
+              (:result data)
+              (str "Driver error: " (:message data))))
+          "Driver error: No response from daemon")))))
 
-(defn navigate-handler [arguments]
+(defn- extract-refs [snapshot]
+  (let [lines (str/split-lines snapshot)
+        ref-pattern #"\[ref=(e\d+)\]"]
+    (into {} (for [line lines
+                   :let [m (re-find ref-pattern line)]
+                   :when m]
+               [(second m) line]))))
+
+;; Browser state is kept in the system's :browser-process atom (the driver process).
+;; Per-session URL/snapshot state is tracked in the mutable driver daemon itself.
+
+(defn navigate-handler [system arguments]
   (let [args (json/parse-string arguments true)
-        url (:url args)]
-    (swap! browser-state assoc :url url :snapshot (get-mock-snapshot url))
-    (json/generate-string {:result (str "Navigated to " url "\n\n" (:snapshot @browser-state))})))
+        url (:url args)
+        result (run-driver system "navigate" :url url)]
+    (json/generate-string {:result result})))
 
-(defn snapshot-handler [_]
-  (json/generate-string {:result (:snapshot @browser-state)}))
+(defn snapshot-handler [system _]
+  (let [result (run-driver system "snapshot")]
+    (json/generate-string {:result result})))
 
-(defn click-handler [arguments]
-  (let [args (json/parse-string arguments true)
-        ref (:ref args)]
-    (json/generate-string {:result (str "Clicked element " ref)})))
-
-(defn type-handler [arguments]
+(defn click-handler [system arguments]
   (let [args (json/parse-string arguments true)
         ref (:ref args)
-        text (:text args)]
-    (json/generate-string {:result (str "Typed '" text "' into " ref)})))
+        result (run-driver system "click" :ref ref)]
+    (json/generate-string {:result result})))
 
-(registry/register!
- {:name "browser_navigate"
-  :handler navigate-handler
-  :schema {:type "function"
-           :function {:name "browser_navigate"
-                      :description "Open a URL and get a snapshot."
-                      :parameters {:type "object"
-                                   :properties {:url {:type "string"}}
-                                   :required ["url"]}}}})
+(defn type-handler [system arguments]
+  (let [args (json/parse-string arguments true)
+        ref (:ref args)
+        text (:text args)
+        result (run-driver system "type" :ref ref :text text)]
+    (json/generate-string {:result result})))
 
-(registry/register!
- {:name "browser_snapshot"
-  :handler snapshot-handler
-  :schema {:type "function"
-           :function {:name "browser_snapshot"
-                      :description "Get the current page snapshot."
-                      :parameters {:type "object" :properties {}}}}})
+(defn register-tools [system]
+  (-> system
+      (registry/register
+       {:name "browser_navigate"
+        :handler navigate-handler
+        :schema {:type "function"
+                 :function {:name "browser_navigate"
+                            :description "Open a URL and get a snapshot."
+                            :parameters {:type "object"
+                                         :properties {:url {:type "string"}}
+                                         :required ["url"]}}}})
+      (registry/register
+       {:name "browser_snapshot"
+        :handler snapshot-handler
+        :schema {:type "function"
+                 :function {:name "browser_snapshot"
+                            :description "Get the current page snapshot."
+                            :parameters {:type "object" :properties {}}}}})
+      (registry/register
+       {:name "browser_click"
+        :handler click-handler
+        :schema {:type "function"
+                 :function {:name "browser_click"
+                            :description "Click an element by reference."
+                            :parameters {:type "object"
+                                         :properties {:ref {:type "string"}}
+                                         :required ["ref"]}}}})
+      (registry/register
+       {:name "browser_type"
+        :handler type-handler
+        :schema {:type "function"
+                 :function {:name "browser_type"
+                            :description "Type text into an element."
+                            :parameters {:type "object"
+                                         :properties {:ref {:type "string"}
+                                                      :text {:type "string"}}
+                                         :required ["ref" "text"]}}}})))
 
-(registry/register!
- {:name "browser_click"
-  :handler click-handler
-  :schema {:type "function"
-           :function {:name "browser_click"
-                      :description "Click an element by reference."
-                      :parameters {:type "object"
-                                   :properties {:ref {:type "string"}}
-                                   :required ["ref"]}}}})
-
-(registry/register!
- {:name "browser_type"
-  :handler type-handler
-  :schema {:type "function"
-           :function {:name "browser_type"
-                      :description "Type text into an element."
-                      :parameters {:type "object"
-                                   :properties {:ref {:type "string"}
-                                                :text {:type "string"}}
-                                   :required ["ref" "text"]}}}})
+(defn register-tools! [system] (register-tools system)) ;; legacy alias

@@ -23,8 +23,8 @@
 
 (defn load-soul []
   (or (some-> (io/resource "SOUL.md") slurp)
-      (read-file-truncated (io/file "SOUL.md") 20000)
-      (read-file-truncated (io/file (System/getProperty "user.home") ".hermes" "SOUL.md") 20000)
+      (read-file-truncated (io/file "SOUL.md") 30000)
+      (read-file-truncated (io/file (System/getProperty "user.home") ".hermes" "SOUL.md") 30000)
       "You are Hermes, an elite AI orchestrator. 
 
 CRITICAL METHODOLOGY:
@@ -40,15 +40,20 @@ You are operating within a restricted sandbox. Use your tools carefully. Always 
 (defn load-project-context [cwd]
   (let [hermes (or (find-up cwd ".hermes.md") (find-up cwd "HERMES.md"))]
     (if hermes
-      (read-file-truncated hermes 20000)
-      (some #(let [f (io/file cwd %)] (when (.exists f) (read-file-truncated f 20000)))
+      (read-file-truncated hermes 30000)
+      (some #(let [f (io/file cwd %)] (when (.exists f) (read-file-truncated f 30000)))
             ["AGENTS.md" "CLAUDE.md" ".cursorrules"]))))
 
-(defn build-system-prompt [{:keys [soul memory skills project-context]}]
-  (let [knowledge (or (some-> (io/resource "KNOWLEDGE.md") slurp)
+(defn build-system-prompt [system {:keys [soul memory skills project-context plan]}]
+  (let [depth (get system :depth 0)
+        ;; plan may be an atom (live plan-atom) or a plain string (test mocks)
+        plan-str (if (instance? clojure.lang.Atom plan) @plan (or plan "No plan established yet."))
+        knowledge (or (some-> (io/resource "KNOWLEDGE.md") slurp)
                       (some-> (io/file "KNOWLEDGE.md") slurp)
                       "No institutional knowledge available.")
         parts (cond-> [soul]
+                (> depth 0) (conj (str "CURRENT DELEGATION DEPTH: " depth " (Be brief and focused on the sub-task)."))
+                :always (conj (str "# Current Plan & Status\n" plan-str))
                 :always (conj (str "# Institutional Knowledge (Operational Patterns)\n" knowledge))
                 :always (conj "ENVIRONMENT CAPABILITIES:\nCommon binaries available: git, python3, gcc, g++, gdb, strace, valgrind, sqlite3, curl, wget, nginx, sshd, pdftotext, tesseract.")
                 memory (conj (str "# Memory\n" memory))

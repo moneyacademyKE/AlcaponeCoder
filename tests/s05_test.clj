@@ -17,13 +17,13 @@
       (is (= "massive output 4" (:content (nth pruned 4))))))
 
   (testing "Layer 2: Finding boundaries"
-    (let [messages [{:role "user" :content "Task Goal"} ;; Head (0)
+    (let [messages [{:role "user" :content "Task Goal"}    ;; Head (0)
                     {:role "assistant" :content "Middle 1"} ;; Middle (1)
-                    {:role "user" :content "Middle 2"} ;; Middle (2)
-                    {:role "assistant" :content "Recent 1"} ;; Tail (3)
-                    {:role "user" :content "Recent 2"}] ;; Tail (4)
-          ;; Protect first 1, tail budget 2 tokens (Recent 2 only)
-          [head-end tail-start] (compression/find-boundaries messages 1 2)]
+                    {:role "user" :content "Middle 2"}     ;; Middle (2)
+                    {:role "assistant" :content "Recent 1"} ;; (3)
+                    {:role "user" :content "Recent 2"}]    ;; Tail (4) — 8 chars
+          ;; budget=8 chars fits exactly msg(4) 'Recent 2'
+          [head-end tail-start] (compression/find-boundaries messages 1 8)]
       (is (= 1 head-end))
       (is (= 4 tail-start))))
 
@@ -36,7 +36,7 @@
           mock-llm (fn [p] "SUMMARY_TEXT")
           ;; Protect 1, tail budget 2 (Starship only)
           compressed (compression/compress messages {:protect-first 1 
-                                                     :tail-token-budget 2
+                                                     :tail-char-budget 8
                                                      :call-llm-fn mock-llm})]
       (is (= 3 (count compressed)))
       (is (= "Goal: Fly to Mars" (:content (first compressed))))

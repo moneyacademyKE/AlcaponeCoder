@@ -11,20 +11,20 @@
   (doseq [t (:tools p)]
     (swap! tool-to-provider assoc (:name t) p)))
 
-(defn prefetch-all [query]
+(defn prefetch-all [system query]
   (let [results (for [p @providers]
                   (try
-                    (when-let [f (:prefetch p)] (f query))
+                    (when-let [f (:prefetch p)] (f system query))
                     (catch Exception e nil)))]
     (str/join "\n" (remove nil? results))))
 
-(defn sync-all [user assistant]
+(defn sync-all [system user assistant]
   (doseq [p @providers]
     (try
-      (when-let [f (:sync p)] (f user assistant))
+      (when-let [f (:sync p)] (f system user assistant))
       (catch Exception e nil))))
 
-(defn handle-tool [name args]
+(defn handle-tool [system name args]
   (if-let [p (get @tool-to-provider name)]
-    ((:handler p) name args)
+    ((:handler p) system name args)
     (str "Error: Unknown memory tool " name)))

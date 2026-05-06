@@ -113,12 +113,13 @@ This is the complete default dictionary defined in code. It establishes the defa
 
 ```clojure
 (def default-config
-  {:model "tencent/hy3-preview:free"
+  {:models {:primary "tencent/hy3-preview:free"
+            :fallback "inclusionai/ling-2.6-1t:free"
+            :auxiliary "google/gemini-flash-1.5:free"}
    :base-url "https://openrouter.ai/api/v1"
    :api-key "${OPENAI_API_KEY}"
    :agent {:max_turns 90 :max_tokens 4096}
-   :fallback-model "inclusionai/ling-2.6-1t:free"
-   :compression {:enabled true :threshold_tokens 20000}
+   :compression {:enabled true :threshold_chars 25000}
    :memory {:enabled true :char_limit 8000}
    :delegation {:max_iterations 50}})
 ```

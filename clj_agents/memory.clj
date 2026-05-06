@@ -2,17 +2,19 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [cheshire.core :as json]
-            [registry]))
+            [registry]
+            [logger]))
 
 (def entry-delimiter "$")
-(def memory-limit 2200)
-(def user-limit 1375)
+(def default-memory-limit 2200)
+(def default-user-limit 1375)
 
-(defn- get-memory-path [target]
-  (let [home (System/getProperty "user.home")
-        dir (io/file home ".hermes" "memories")]
-    (when-not (.exists dir) (.mkdirs dir))
-    (io/file dir (if (= target "user") "USER.md" "MEMORY.md"))))
+(defn- get-memory-path [system target]
+  (let [config (get-in system [:config :memory] {})
+        base-dir (or (:base_dir config)
+                     (io/file (System/getProperty "user.home") ".hermes" "memories"))]
+    (when-not (.exists (io/as-file base-dir)) (.mkdirs (io/as-file base-dir)))
+    (io/file base-dir (if (= target "user") "USER.md" "MEMORY.md"))))
 
 (defn parse-entries [text]
   (if (str/blank? text)
@@ -26,27 +28,33 @@
     ""
     (str/join "\n" (map #(str entry-delimiter " " %) entries))))
 
-(defn load-memory [target]
-  (let [f (get-memory-path target)]
+(defn load-memory [system target]
+  (let [f (get-memory-path system target)]
     (if (.exists f)
       (parse-entries (slurp f))
       [])))
 
-(defn save-memory [target entries]
-  (let [f (get-memory-path target)
-        limit (if (= target "user") user-limit memory-limit)
+(defn save-memory [system target entries]
+  (let [f (get-memory-path system target)
+        config (get-in system [:config :memory] {})
+        limit (if (= target "user") 
+                (or (:user_limit config) default-user-limit)
+                (or (:memory_limit config) default-memory-limit))
         ;; Simple FIFO truncation: if total chars > limit, drop first entry and recur
         truncated-entries (loop [current entries]
                             (if (or (empty? current)
                                     (<= (count (render-entries current)) limit))
-                              current
-                              (recur (rest current))))]
+                               current
+                               (recur (rest current))))]
     (spit f (render-entries truncated-entries))))
 
-(defn format-for-system-prompt [target]
-  (let [entries (load-memory target)
+(defn format-for-system-prompt [system target]
+  (let [entries (load-memory system target)
         text (render-entries entries)
-        limit (if (= target "user") user-limit memory-limit)
+        config (get-in system [:config :memory] {})
+        limit (if (= target "user") 
+                (or (:user_limit config) default-user-limit)
+                (or (:memory_limit config) default-memory-limit))
         header (if (= target "user") "USER PROFILE (who the user is)" "MEMORY (your personal notes)")
         percent (int (* 100 (/ (count text) limit)))]
     (if (empty? entries)
@@ -54,17 +62,17 @@
       (str "## " header " [" percent "% -- " (count text) "/" limit " chars]\n" text))))
 
 ;; Tool Implementation
-(defn memory-tool [{:keys [action content target] :or {target "memory"}}]
-  (let [entries (load-memory target)]
+(defn memory-tool [system {:keys [action content target] :or {target "memory"}}]
+  (let [entries (load-memory system target)]
     (case action
       "add"
       (let [new-entries (conj (vec entries) content)]
-        (save-memory target new-entries)
+        (save-memory system target new-entries)
         (str "Added to " target ". Current entries: " (count new-entries)))
       
       "remove"
       (let [new-entries (filterv #(not (str/includes? % content)) entries)]
-        (save-memory target new-entries)
+        (save-memory system target new-entries)
         (str "Removed from " target ". Current entries: " (count new-entries)))
       
       "read"
@@ -87,7 +95,7 @@
       
       (str "Unknown action: " action))))
 
-(defn consolidate! [messages call-llm-fn]
+(defn consolidate! [system messages call-llm-fn]
   (let [prompt "Review the following conversation history and extract any important facts, user preferences, or project state that should be saved to long-term memory. Output each fact as a single line starting with $. If nothing new, output nothing.\n\nCONVERSATION:\n"
         history-text (str/join "\n" (map #(str (:role %) ": " (:content %)) messages))
         result (call-llm-fn (str prompt history-text))]
@@ -96,20 +104,23 @@
                            (filter #(str/starts-with? % "$"))
                            (map #(str/replace % #"^\$\s*" "")))]
         (when (seq new-facts)
-          (let [existing (load-memory "memory")
+          (let [existing (load-memory system "memory")
                 updated (into existing new-facts)]
-            (save-memory "memory" updated)
-            (println (str "[MEMORY] Consolidated " (count new-facts) " new facts."))))))))
+            (save-memory system "memory" updated)
+            (logger/info system "memory_consolidated" {:facts (count new-facts)})))))))
 
-;; Register the tool
-(registry/register!
-  {:name "memory"
-   :handler (fn [args] (memory-tool (json/parse-string args true)))
-   :schema {:type "function"
-            :function {:name "memory"
-                       :description "Manage long-term memory across sessions. Use target='user' for personal info and target='memory' for project/env info."
-                       :parameters {:type "object"
-                                    :properties {:action {:type "string" :enum ["add" "remove" "read" "search"]}
-                                                 :content {:type "string" :description "The memory entry or search string for removal/search"}
-                                                 :target {:type "string" :enum ["memory" "user"] :default "memory"}}
-                                    :required ["action"]}}}})
+(defn register-tools [system]
+  (registry/register
+    system
+    {:name "memory"
+     :handler (fn [s args] (memory-tool s (json/parse-string args true)))
+     :schema {:type "function"
+              :function {:name "memory"
+                         :description "Manage long-term memory across sessions. Use target='user' for personal info and target='memory' for project/env info."
+                         :parameters {:type "object"
+                                      :properties {:action {:type "string" :enum ["add" "remove" "read" "search"]}
+                                                   :content {:type "string" :description "The memory entry or search string for removal/search"}
+                                                   :target {:type "string" :enum ["memory" "user"] :default "memory"}}
+                                      :required ["action"]}}}}))
+
+(defn register-tools! [system] (register-tools system)) ;; legacy alias
