@@ -28,3 +28,26 @@
 - **Fix**: Use `pdftotext` (from `poppler-utils`) for invoices.
 - **Fix**: Use `tesseract` for OCR on `.jpg` or `.png` files.
 - **Fix**: Always pipe tool output to `head -n 50` if you expect massive logs to prevent context overflow.
+
+## Babashka Runtime Quirks
+- **Pattern**: `bb` script fails to find a namespace or file.
+- **Fix**: Always pass `--classpath clj_agents` explicitly — do NOT rely on CWD. Example: `bb --classpath clj_agents clj_agents/harbor.clj`.
+- **Pattern**: `ClassCastException: Atom cannot be cast to Associative` at startup.
+- **Fix**: This means `:registry` was initialized as `(atom {})` but a pure function called `(update system :registry ...)`. The fix is always `{:registry {}}` (plain map) in `system/create-system`.
+- **Pattern**: `NullPointerException` in `set_plan` tool.
+- **Fix**: The plan is stored in `:plan-atom` (a `(atom "...")` in system) and the tool calls `(reset! plan-atom new-plan)`. Never use `(get @(:state system) :plan)` — `:state` is a plain map, not an atom.
+
+## Config Key Validation
+- **Pattern**: A config setting appears to have no effect.
+- **Fix**: Run `grep -r "the-key-name" clj_agents/` to find ALL write-sites (defaults) and read-sites (usages). If they disagree (e.g. `:threshold_tokens` vs `:threshold_chars`), the read-site default silently wins.
+- **Prevention**: After adding any new config key, grep for it immediately to verify write/read site agreement.
+
+## Log Location
+- **Pattern**: Log file is not found or keeps resetting.
+- **Fix**: Logs go to `~/.hermes/hermes.log` (stable, absolute path). Do NOT read from `./hermes.log` (CWD-relative, broken in containers).
+- **Fix**: Harbor benchmark logs additionally go to `/logs/agent/hermes_bb.txt` if that mount exists.
+
+## Budget & Turn Tracking
+- **Pattern**: Agent runs infinitely or exits immediately.
+- **Fix**: Budget is stored as a plain integer value in `(get system :budget)`, decremented with `(update system :budget dec)`. It is NOT an atom. Check `(get current-system :budget 100)` — default 100 if missing.
+- **Fix**: Max turns is set in config at `[:agent :max_turns]` (default 90). Loop exits when `(>= iteration max_turns)` OR `(<= budget 0)`.

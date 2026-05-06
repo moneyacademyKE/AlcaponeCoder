@@ -168,35 +168,33 @@ Following Rich Hickey's philosophy, Hermes Agent separates "what happens" (pure 
 
 Modern agents often call multiple independent tools in a single turn. Hermes Agent uses `pmap` to parallelize these calls, significantly reducing latency. To maintain stability, shared resources (like the Browser Daemon) are protected by explicit **locks** within the Clojure handlers, ensuring that concurrent executions don't interleave their I/O streams.
 
-### 2. Why Use the OpenAI SDK as the Only API Client
+### 2. Why Use the OpenAI-Compatible SDK as the Only API Client
 
-Hermes Agent is not locked to any single model provider. It uses the OpenAI Python SDK (`from openai import OpenAI`) and connects to different providers by setting different `base_url` values.
+Hermes Agent is not locked to any single model provider. It uses an OpenAI-compatible HTTP client and connects to different providers by setting different `base_url` values.
 
-This means switching from OpenRouter to Anthropic or a local endpoint requires zero code changes -- just a configuration update.
+This means switching from OpenRouter to Anthropic or a local endpoint requires zero code changes — just a configuration update.
 
 This decision dictates the message format for the entire system: all messages use the OpenAI format (`role: user/assistant/tool`, `tool_calls`, `tool_call_id`).
 
-### 2. Why the Core Loop Is Synchronous
+### 3. Why the Core Loop Is Synchronous
 
-Most modern Python frameworks lean toward fully async. But the core loop in Hermes Agent is a synchronous `def run_conversation()`, not an `async def`.
+The core loop in Hermes Agent is a synchronous `loop/recur` in Babashka (Clojure), not an async loop.
 
 The reasons are practical:
 
 - Most tools (file I/O, terminal commands) are inherently synchronous
 - Error handling and debugging are far simpler in a synchronous loop
-- The few async tools (network requests) are bridged in through a persistent event loop
+- Independent tool calls within a single turn are parallelized with `pmap`
 
-This "synchronous body + async bridge" pattern runs through the entire tool layer.
+This "synchronous body + pmap tool dispatch" pattern runs through the entire tool layer.
 
-### 3. Why Tools Use Self-Registration Instead of Central Configuration
+### 4. Why Tools Use Pure Registration Instead of Global Side-Effects
 
-Each tool file automatically calls the registry's `register()` method on Python import.
+Each tool module defines `(defn register-tools [system] ...)` which returns the enriched system map. `system/create-system` threads the base map through all registrations using `->`, capturing the final enriched system.
 
-The import chain is clear: the registry depends on no tools -> tools depend on the registry -> the orchestration layer imports all tools to trigger registration -> the core loop uses the orchestration layer.
+This means adding a new tool only requires writing one file and adding it to the `->` chain in `system.clj`. No other file needs to change. There are no global atoms in the tool registration path.
 
-This means adding a new tool only requires writing one file; no other file needs to change.
-
-### 4. Why SQLite Instead of the File System
+### 5. Why SQLite Instead of the File System
 
 Because in the Gateway scenario, messages from multiple platforms can arrive simultaneously. SQLite's WAL mode supports concurrent reads and writes, and FTS5 enables full-text search over historical sessions.
 
