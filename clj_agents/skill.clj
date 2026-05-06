@@ -44,29 +44,14 @@
       (str "# Available Skills (Top 10)\n"
            (str/join "\n" (for [s skills] (str "- " (:name s) ": " (:description s))))))))
 
-(defn- get-stats-file []
-  (io/file (get-skills-dir) "stats.json"))
-
-(defn load-stats! [system]
-  (let [f (get-stats-file)
-        stats-atom (get system :skill-stats (atom {}))]
-    (if (.exists f)
-      (reset! stats-atom (json/parse-string (slurp f) true))
-      (reset! stats-atom {}))))
-
-(defn save-stats! [system]
-  (let [stats-atom (get system :skill-stats (atom {}))]
-    (spit (get-stats-file) (json/generate-string @stats-atom))))
-
-(defn track-usage! [system name success?]
-  (load-stats! system)
-  (let [stats-atom (get system :skill-stats (atom {}))
-        stats (get @stats-atom (keyword name) {:hits 0 :successes 0})
-        new-stats (-> stats
-                      (update :hits inc)
-                      (update :successes (fn [s] (if success? (inc s) s))))]
-    (swap! stats-atom assoc (keyword name) new-stats)
-    (save-stats! system)))
+(defn track-usage [name success?]
+  (fn [system]
+    (let [stats (get system :skill-stats {})
+          current (get stats (keyword name) {:hits 0 :successes 0})
+          new-entry (-> current
+                        (update :hits inc)
+                        (update :successes (fn [s] (if success? (inc s) s))))]
+      (assoc-in system [:skill-stats (keyword name)] new-entry))))
 
 ;; Tool Implementations
 (defn skill-view-tool [system {:keys [name]}]
@@ -74,8 +59,7 @@
         skill-md (io/file skill-dir "SKILL.md")]
     (if (.exists skill-md)
       (let [{:keys [body]} (parse-skill-md (slurp skill-md))]
-        (track-usage! system name false) ;; Increment hits, success will be verified post-task
-        body)
+        {:result body :system-update (track-usage name false)})
       (str "Skill '" name "' not found."))))
 
 (defn skill-manage-tool [{:keys [action name description content status] :or {status "verified"}}]

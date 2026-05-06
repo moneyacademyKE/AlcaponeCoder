@@ -107,13 +107,14 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 **Benefit**: Enables high-concurrency isolation, predictable resource lifecycles, and simplified unit testing of "pure" agent logic via mocks.
 
 ## Pattern 10.1: Pure Logical State (Rich Hickey Certification)
-**Context**: Even within a system map, internal atoms for logical counters (like turn counts) can lead to non-deterministic behavior and race conditions in parallel executions.
-**Solution**: Move all logical state into the immutable portion of the system map. The agent loop and tool handlers return a new version of the system map if they modify logical state.
+**Context**: Even within a system map, internal atoms for logical counters, hooks, or telemetry can lead to non-deterministic behavior and race conditions in parallel executions (e.g. `pmap`).
+**Solution**: Move ALL logical state into the immutable portion of the system map. The agent loop and tool handlers return pure system-update functions if they modify state.
 **Implementation**:
-1. Tool handlers return `{:system new-system :result "..."}` if they update state.
-2. The agent loop uses `recur` with the updated system map returned by LLM or tool calls.
-3. Reserve atoms only for shared, external resource pools (e.g. Browser Driver connection).
-**Benefit**: Full "Rich Hickey" purity. 100% deterministic logic and perfect traceability of system evolution over time.
+1. System state is initialized as pure maps (`:hooks {}`, `:cron-jobs {}`, `:approvals {}`).
+2. Tool handlers return `{:result "..." :system-update (fn [sys] ...)}` if they update state.
+3. The agent loop executes tools in parallel via `pmap`, then uses `reduce` sequentially with the returned system-update functions to produce the next epoch's system map.
+4. Reserve atoms ONLY for shared, external resource pools (e.g. Browser Driver OS process handles).
+**Benefit**: Full "Rich Hickey" Simple Made Easy purity. 100% deterministic logic, safe concurrency without STM locks, and perfect traceability of system evolution over time.
 
 ## Pattern 13: Value-based Tool Registry
 **Context**: Dynamic registration into atoms makes it hard to manage tool visibility per-agent.
@@ -173,12 +174,56 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 1. Check `config.yaml` for typo (e.g. `threshold_token` instead of `threshold_chars`).
 2. Run `grep -r ":threshold_chars" clj_agents/` to ensure read and write sites match.
 
-## 16. The "Rich Hickey System-Scoped Atom" Pattern
-**Problem**: Your core loop is pure functional value-passing, but your telemetry (`usage-stats`), authorization (`session-approvals`), or scheduler (`job-store`) modules use `defonce` global atoms. This breaks system isolation, making it impossible to safely run parallel agents in the same JVM/process.
-**Pattern**: Never use `defonce` or global atoms for business logic state. Instead, define local scoped atoms inside the base map in `system/create-system`:
+## 16. The "Rich Hickey Pure Data Pipeline" Pattern
+**Problem**: Your core loop is pure functional value-passing, but your telemetry (`usage-stats`), authorization (`session-approvals`), or scheduler (`job-store`) modules use local scoped atoms inside the system map to handle concurrency. While better than global atoms, this still complects the logic and relies on STM locking for parallel `pmap` execution.
+**Pattern**: Completely eliminate atoms from the `system` map (except for OS handles like `:browser-process`). Return explicit payloads from tools and serialize state updates.
 ```clojure
-{:approvals (atom {})
- :cron-jobs (atom {})
- :skill-stats (atom {})}
+;; In system.clj
+{:approvals {}
+ :cron-jobs {}
+ :skill-stats {}}
+
+;; In tool handler
+{:result "Added job"
+ :system-update (fn [sys] (update sys :cron-jobs ...))}
+
+;; In agent loop after parallel tool execution
+(reduce (fn [sys tr] (if-let [f (:system-update tr)] (f sys) sys)) current-system tool-results)
 ```
-**Why Atom here?**: The `system` map is threaded immutably, but tools execute in parallel via `pmap`. If multiple tools simultaneously need to update stats, they would require complex pure-functional reduction over tool results. A local atom *inside* an immutable, session-bound map provides thread-safe concurrency without global state bleed.
+**Why Pure Data?**: The `system` map is threaded immutably. Tools execute in parallel via `pmap`, returning their independent functional state updates. The central orchestrator then applies these updates sequentially in a strict "epoch" transition. This provides perfectly decoupled concurrency, completely isolated benchmarking, and pristine testing semantics.
+
+## Pattern 17: The Pure Reducer Scheduler
+**Problem**: Background scheduler threads complect state with time and break system determinism.
+**Solution**: De-complect scheduling by integrating it as a pure reduction step at the turn boundary.
+**Implementation**:
+1. Store the schedule purely in the system map (`:cron-jobs {}`).
+2. At the start of `run-conversation`, call `(cron/get-due-jobs system)`.
+3. Use `reduce` to apply the `advance-job` update functions to the system map before the first LLM call.
+**Benefit**: Full predictability and observability of time-based triggers.
+
+## Pattern 18: Boundary-Isolated Persistence (Persistence Gates)
+**Problem**: Direct I/O in tools breaks the "Pure Data Pipeline" and concurrency safety.
+**Solution**: Isolate all disk I/O to explicit "Persistence Gates" in the imperative shell.
+**Implementation**:
+1. Tools only return functional updates to the system map.
+2. The orchestrator calls `(store/save-system-state! system)` only at checkpoints or session exit.
+3. Background threads (like Reviewers) use dedicated boundary functions (`store/update-skill-stats!`) to ensure atomic disk updates.
+**Benefit**: Lock-free parallel execution and clean separation of concerns.
+## Pattern 19: The Validated System Map (Rich Hickey Certification)
+**Context**: As seen in Learning #77, partial migrations to the "Pure Data Pipeline" can lead to `ClassCastException` if atoms are accidentally injected into a system that expects plain maps.
+**Solution**: Use Babashka 1.12+'s enhanced `deftype` (with `IPersistentMap` support) to create a `ValidatedSystemMap`. This structure behaves exactly like a Clojure map but intercepts all `assoc` and `conj` calls to validate the system's structural integrity.
+**Implementation**:
+1. Define a `deftype` or `defrecord` that implements map interfaces.
+2. In the `assoc` method, check if the key (e.g. `:registry`) is being updated with a value of the correct type (e.g. a plain Map, not an Atom).
+3. If invalid, throw a descriptive `AssertionError` immediately at the call site, rather than crashing in a distant `pmap` thread later.
+4. **Specter Integration**: Use **Specter** for all navigation into this map to keep transformations declarative and "Simple".
+
+**Example**:
+```clojure
+(defn create-system [config]
+  (->ValidatedSystemMap
+    {:config config
+     :registry {}
+     :budget 100}))
+```
+**Benefit**: Guarantees system-wide architectural consistency. Achieves "Rich Hickey Certification" by making the system's "Self-Consistency" a property of the data structure itself.

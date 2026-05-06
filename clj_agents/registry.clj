@@ -9,16 +9,11 @@
     new-system) )
 
 (defn register! [system tool-entry]
-  ;; Backward compatibility alias for atoms (to be removed)
-  (let [t-atom (get system :registry (atom {}))]
-    (swap! t-atom assoc (:name tool-entry) tool-entry)
-    (logger/info system "tool_registered_legacy" {:name (:name tool-entry)})
-    system))
+  ;; Legacy alias — now delegates to pure register
+  (register system tool-entry))
 
 (defn get-definitions [system]
-  (let [registry (get system :registry {})
-        ;; Handle case where registry might still be an atom (legacy)
-        data (if (instance? clojure.lang.Atom registry) @registry registry)
+  (let [data (get system :registry {})
         allowed-tools (:allowed-tools system)]
     (->> data
          vals
@@ -28,16 +23,24 @@
          (map :schema))))
 
 (defn dispatch [system name arguments]
-  (let [registry (get system :registry {})
-        data (if (instance? clojure.lang.Atom registry) @registry registry)
+  (let [data (get system :registry {})
         entry (get data name)]
     (if-not entry
       (json/generate-string {:status "error" :message (str "Unknown tool: " name)})
       (let [handler (:handler entry)
-            session-id (:id system)]
-        (if (and session-id (not (permissions/check-permission session-id (str name " " arguments))))
+            [allowed? perm-update] (permissions/check-permission system (str name " " arguments))]
+        (if-not allowed?
           (json/generate-string {:status "error" :message "Permission denied by user."})
           (try
-            (handler system arguments)
+            (let [res (handler system arguments)]
+              (if (map? res)
+                (let [handler-update (:system-update res)
+                      combined-update (if (and perm-update handler-update)
+                                        (comp handler-update perm-update)
+                                        (or handler-update perm-update))]
+                  (assoc res :system-update combined-update))
+                (if perm-update
+                  {:result res :system-update perm-update}
+                  res)))
             (catch Exception e
               (json/generate-string {:status "error" :message (str "Error executing tool '" name "': " (ex-message e))}))))))))

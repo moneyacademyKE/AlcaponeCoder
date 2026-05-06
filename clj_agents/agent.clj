@@ -12,7 +12,9 @@
             [hooks]
             [reviewer]
             [llm]
-            [logger])
+            [store]
+            [logger]
+            [cron])
   (:import [java.util.concurrent Executors]))
 
 (defn- spawn-background-review! [system messages review-memory review-skills]
@@ -35,6 +37,14 @@
         
         ;; Ensure counters are present — system/create-system always sets these,
         ;; but test systems may pass minimal maps, so we guard with fnil.
+        now (System/currentTimeMillis)
+        due-jobs (cron/get-due-jobs system now)
+        system (reduce (fn [sys job]
+                         (println (str "[CRON] Firing job: " (:job-id job)))
+                         ((cron/advance-job job now) sys))
+                       system
+                       due-jobs)
+
         system (-> system
                    (update-in [:state :turns-since-memory] (fnil identity 0))
                    (update-in [:state :iters-since-skill] (fnil identity 0))
@@ -69,6 +79,8 @@
                 ;; Checkpointing (every 20 turns)
                 _ (when (and (pos? iteration) (zero? (mod iteration 20)))
                     (logger/info current-system "checkpoint" {:turn iteration})
+                    ;; Serialize system state to persistent store (Imperative Shell)
+                    (store/save-system-state! current-system)
                     (memory/consolidate! current-system messages (partial llm/call-auxiliary-llm current-system)))
 
                 ;; Proactive Compaction Check (15,000 + 10,000 char limit)
@@ -150,11 +162,31 @@
                                                     tool-args (get-in tc [:function :arguments])]
                                                 (logger/info current-system "tool_call_start" {:name tool-name :args tool-args})
                                                 (hooks/emit! current-system :pre_tool_call {:name tool-name :args tool-args})
-                                                (let [result (registry/dispatch current-system tool-name tool-args)]
+                                                (let [dispatch-res (registry/dispatch current-system tool-name tool-args)
+                                                      result-str (if (map? dispatch-res) (:result dispatch-res) dispatch-res)
+                                                      update-fn (if (map? dispatch-res) (:system-update dispatch-res) nil)]
                                                   (logger/info current-system "tool_call_end" {:name tool-name})
-                                                  (hooks/emit! current-system :post_tool_call {:name tool-name :args tool-args :result result})
+                                                  (hooks/emit! current-system :post_tool_call {:name tool-name :args tool-args :result result-str})
                                                   {:role "tool"
                                                    :tool_call_id (:id tc)
-                                                   :content result})))
-                                            (:tool_calls assistant-msg)))]
-                    (recur (into new-messages tool-results) (inc iteration) 0 0 current-system)))))))))))
+                                                   :content result-str
+                                                   :system-update update-fn})))
+                                            (:tool_calls assistant-msg)))
+                        next-messages (into new-messages (map #(dissoc % :system-update) tool-results))
+                        reduced-system (try
+                                         (reduce (fn [sys tr]
+                                                   (if-let [f (:system-update tr)]
+                                                     (try
+                                                       (f sys)
+                                                       (catch Exception e
+                                                         (throw (ex-info (str "Tool update failed: " (ex-message e))
+                                                                         {:tool-result tr :original-error e}))))
+                                                     sys))
+                                                 current-system
+                                                 tool-results)
+                                         (catch Exception e
+                                           (logger/error current-system "system_reduction_failed" {:error (ex-message e)})
+                                           {:status :error :reason :system-corruption :message (ex-message e) :system current-system}))]
+                    (if (= :error (:status reduced-system))
+                      reduced-system
+                      (recur next-messages (inc iteration) 0 0 reduced-system))))))))))))

@@ -4,9 +4,9 @@
             [clj-yaml.core :as yaml]))
 
 (def default-config
-  {:models {:primary "minimax/minimax-m2.5:free"
-            :fallback "poolside/laguna-m.1:free"
-            :auxiliary "minimax/minimax-m2.5:free"}
+  {:models {:primary "tencent/hy3-preview:free"
+            :fallback "inclusionai/ling-2.6-1t:free"
+            :auxiliary "inclusionai/ling-2.6-1t:free"}
    :base-url "https://openrouter.ai/api/v1"
    :api-key "${OPENAI_API_KEY}"
    :agent {:max_turns 90 :max_tokens 4096}
@@ -63,9 +63,18 @@
   (let [home (get-hermes-home)
         _ (.mkdirs home)
         config-file (io/file home "config.yaml")
-        user-config (if (.exists config-file)
-                      (yaml/parse-string (slurp config-file))
-                      {})
+        raw-user-config (if (.exists config-file)
+                          (yaml/parse-string (slurp config-file))
+                          {})
+        ;; Backward compatibility: map legacy keys into nested :models
+        user-config (cond-> raw-user-config
+                      (:model raw-user-config)
+                      (assoc-in [:models :primary] (:model raw-user-config))
+                      
+                      (:fallback-model raw-user-config)
+                      (assoc-in [:models :fallback] (:fallback-model raw-user-config))
+                      
+                      true (dissoc :model :fallback-model))
         expanded (expand-env-vars (deep-merge default-config user-config))]
     (if (str/starts-with? (:api-key expanded) "${")
       (let [fallback (or (System/getenv "OPENROUTER_API_KEY") 

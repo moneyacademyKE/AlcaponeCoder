@@ -3,6 +3,7 @@
             [cheshire.core :as json]
             [skill]
             [registry]
+            [store]
             [llm]))
 
 (def extract-skills-prompt
@@ -78,7 +79,7 @@
       (when (and success? (seq viewed-skills))
         (println (str "[REVIEWER] Task successful! Updating " (count viewed-skills) " used skills with success hits."))
         (doseq [s viewed-skills]
-          (skill/track-usage! s true))))
+          (store/update-skill-stats! s true))))
 
     (try
       (let [parsed (json/parse-string response-str true)]

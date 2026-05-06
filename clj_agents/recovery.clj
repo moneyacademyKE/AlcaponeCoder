@@ -20,7 +20,7 @@
       {:reason :server-error :retryable true :should-compress false :should-fallback false}
       
       (contains? #{401 403} status-code)
-      {:reason :auth :retryable false :should-compress false :should-fallback true}
+      {:reason :auth :retryable false :should-compress false :should-fallback false}
       
       (= status-code 402)
       {:reason :payment-required :retryable false :should-compress false :should-fallback true}

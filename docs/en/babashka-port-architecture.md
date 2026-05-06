@@ -71,15 +71,17 @@
  :registry       {"terminal" {...}    ; tool registry (plain map, NOT atom)
                   "memory"   {...}
                   ...}                ; 13 tools total after create-system
- :hooks          (atom {})            ; lifecycle hooks (atom OK — local mutation)
- :plan-atom      (atom "No plan...")  ; current roadmap (reset by set_plan tool)
+ :hooks          {}                   ; lifecycle hooks (plain map)
+ :approvals      {}                   ; user permissions (plain map)
+ :cron-jobs      {}                   ; background jobs (plain map)
+ :skill-stats    {}                   ; usage stats (plain map)
  :state          {:turns-since-memory 0
                   :iters-since-skill  0
-                  :plan               <plan-atom>} ; prompt builder derefs this
- :browser-process (atom nil)}        ; browser daemon process (atom OK — process handle)
+                  :plan               "No plan..."} ; pure string
+ :browser-process (atom nil)}        ; OS process handle (atom OK for external IO)
 ```
 
-**Key invariant**: `:registry` is always a plain map. Any code that treats it as an atom will crash with `ClassCastException: Atom cannot be cast to Associative`.
+**Key invariant**: The system map is purely immutable data (following Rich Hickey's "Simple Made Easy" principles). Tools cannot mutate the system using `swap!` or `reset!`. Instead, if a tool needs to change the system state, it returns an explicit payload: `{:result string :system-update (fn [sys] ...)}`. The `agent.clj` loop handles concurrency by running tools via `pmap` and then sequentially reducing their update functions into the next epoch's system map.
 
 ---
 

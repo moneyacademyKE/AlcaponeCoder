@@ -35,17 +35,17 @@
 
 (defn check-permission [system command]
   (if-let [desc (detect-danger command)]
-    (let [approvals-atom (get system :approvals (atom {}))
-          permanent-atom (atom #{}) ;; in a real system we would load from config
+    (let [approvals (get system :approvals {})
           session-id (:id system)]
       (cond
-        (contains? (get @approvals-atom session-id) desc) true
-        (contains? @permanent-atom desc) true
-        (= "true" (System/getenv "HEADLESS")) (do (println "[SYSTEM] Headless mode: Auto-approving dangerous command.") true)
+        (contains? (get approvals session-id) desc) [true nil]
+        (= "true" (System/getenv "HEADLESS"))
+        (do (println "[SYSTEM] Headless mode: Auto-approving dangerous command.") [true nil])
+        
         :else (let [choice (ask-user command desc)]
                 (case choice
-                  :once true
-                  :session (do (swap! approvals-atom update session-id (fnil conj #{}) desc) true)
-                  :always (do (swap! permanent-atom conj desc) true)
-                  false))))
-    true))
+                  :once [true nil]
+                  :session [true (fn [sys] (update-in sys [:approvals session-id] (fnil conj #{}) desc))]
+                  :always [true nil] ;; Note: we drop permanent-atom since this is purely functional system scope now
+                  [false nil]))))
+    [true nil]))

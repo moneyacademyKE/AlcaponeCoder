@@ -1,35 +1,41 @@
-(ns harbor
-  (:require [config]
-            [store]
-            [agent]
-            [system]
-            [cheshire.core :as json]
-            [logger]))
-
 (defn -main []
   (try
-    (logger/info {} "harbor_start" {:instruction (System/getenv "HARBOR_INSTRUCTION")})
-    (config/load-env)
-    (let [cfg (config/load-config)
-          model (System/getenv "HARBOR_MODEL")
-          cfg (if model (assoc-in cfg [:models :primary] model) cfg)]
-      (store/init-db!)
-      (let [sys (system/create-system :config cfg)
-            result (agent/run-conversation sys (System/getenv "HARBOR_INSTRUCTION") (:state sys))]
-        (if (= :error (:status result))
-          (do
-            (logger/error sys "harbor_agent_error" {:reason (:reason result) :message (:message result)})
-            (println (json/generate-string {:status "error" :error result}))
-            (System/exit 0)) ;; Exit 0 to prevent NonZeroAgentExitCodeError, error is in logs/output
-          (do
-            (logger/info sys "harbor_success" {:response (:final-response result)})
-            (println (json/generate-string {:status "success" :response (:final-response result)}))
-            (System/exit 0)))))
+    (require '[config] '[store] '[agent] '[system] '[cheshire.core :as json] '[logger] '[cron])
+    (let [json (resolve 'json/generate-string)
+          logger-info (resolve 'logger/info)
+          logger-error (resolve 'logger/error)
+          config-load-env (resolve 'config/load-env)
+          config-load-config (resolve 'config/load-config)
+          store-init-db! (resolve 'store/init-db!)
+          system-create-system (resolve 'system/create-system)
+          agent-run-conversation (resolve 'agent/run-conversation)
+          cron-get-due-jobs (resolve 'cron/get-due-jobs)]
+
+      (logger-info {} "harbor_start" {:instruction (System/getenv "HARBOR_INSTRUCTION")})
+      (config-load-env)
+      (let [cfg (config-load-config)
+            model (System/getenv "HARBOR_MODEL")
+            cfg (if model (assoc-in cfg [:models :primary] model) cfg)]
+        (store-init-db!)
+        (let [sys (system-create-system :config cfg)
+              result (agent-run-conversation sys (System/getenv "HARBOR_INSTRUCTION") (:state sys))]
+          (if (= :error (:status result))
+            (do
+              (logger-error sys "harbor_agent_error" {:reason (:reason result) :message (:message result)})
+              (println (json {:status "error" :error result}))
+              (System/exit 0))
+            (do
+              (logger-info sys "harbor_success" {:response (:final-response result)})
+              (println (json {:status "success" :response (:final-response result)}))
+              (System/exit 0))))))
     (catch Exception e
       (let [err-msg (str "Fatal Harbor Runner Error: " (ex-message e))]
-        (logger/error {} "harbor_fatal" {:message err-msg})
-        (println (json/generate-string {:status "fatal" :message err-msg}))
-        (System/exit 0))))) ;; Still exit 0 to allow Harbor to capture the JSON error
+        (try
+          (let [json-fn (or (resolve 'cheshire.core/generate-string) pr-str)]
+            (println (json-fn {:status "fatal" :message err-msg})))
+          (catch Exception _
+            (println (str "{\"status\": \"fatal\", \"message\": \"" err-msg "\"}"))))
+        (System/exit 0)))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (-main))

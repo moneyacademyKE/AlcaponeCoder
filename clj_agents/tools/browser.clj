@@ -5,12 +5,18 @@
             [registry]))
 
 (defn- get-or-start-driver! [system]
-  (let [browser-atom (get system :browser-process (atom nil))]
+  (if-let [browser-atom (:browser-process system)]
     (if-let [p @browser-atom]
       p
-      (let [p (babashka.process/process ["node" "scripts/browser_driver_daemon.js"] {:in :pipe :out :pipe :err :inherit})]
-        (reset! browser-atom p)
-        p))))
+      (try
+        (let [p (babashka.process/process ["node" "scripts/browser_driver_daemon.js"] 
+                                           {:in :pipe :out :pipe :err :inherit})]
+          (reset! browser-atom p)
+          p)
+        (catch Exception e
+          (throw (ex-info "Failed to start browser driver daemon. Is node installed?" 
+                          {:original-error e})))))
+    (throw (AssertionError. "System missing :browser-process atom"))))
 
 (defn- run-driver [system action & args]
   (let [p (get-or-start-driver! system)

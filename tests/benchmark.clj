@@ -35,7 +35,7 @@
         (testing "2. State Management"
           (let [res (run-task sys "Memory" "Add a memory entry 'Project uses Babashka with OpenRouter' and then read it back to confirm.")]
             (is (not (nil? (:final-response res))))
-            (is (clojure.string/includes? (memory/render-entries (memory/load-memory "memory")) "OpenRouter"))
+            (is (clojure.string/includes? (memory/render-entries (memory/load-memory sys "memory")) "OpenRouter"))
             (println "Duration:" (:duration res) "ms")))
         
         (testing "3. Problem Solving"

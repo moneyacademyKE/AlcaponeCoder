@@ -147,3 +147,19 @@
 - **Observation**: The `clj_agents/sNN_*.clj` files were "chapter demos" from the initial port phase — early standalone scripts that duplicated logic now living in the real production modules (`agent.clj`, `compression.clj`, etc.). They accumulated to 24 files with 20 associated dead test files, adding confusion and causing test failures when they referenced removed global APIs.
 - **Learning**: Chapter-based demo scripts should be deleted **immediately** after the real module is certified green. The signal to delete is: "does this file have a `(when (= *file* ...) ...)` main guard and does it require a module that is now a real production file?" If yes, delete it.
 - **Result**: 44 files deleted. Codebase is now clean — only production modules and their corresponding real tests remain.
+
+## 81. The "Pure Reducer Scheduler" Pattern (Rich Hickey Purity)
+- **Observation**: Background scheduler threads (using `future` or `agent`) complect state with time and make reasoning non-deterministic. A job might fire "between" agent turns, causing state drift that the model can't see.
+- **Learning**: De-complect scheduling by making it a **Pure Reduction Step** at the start of each turn. The system map contains the `:cron-jobs` schedule; the orchestrator calculates "due" jobs, fires them, and uses the returned `system-update` functions to advance the schedule before the turn officially begins.
+- **Result**: Scheduler is now 100% testable, deterministic, and synchronized with the agent's turn-based reality.
+
+## 82. Boundary-Isolated Persistence (Imperative Shell)
+- **Observation**: Writing to disk (`jobs.json`, `stats.json`) directly inside tool handlers breaks the "Pure Data Pipeline" and causes I/O race conditions during `pmap`.
+- **Learning**: Reserve disk I/O strictly for the **Imperative Shell** (system boundaries). Tools return functional updates to the in-memory system map. Explicit "Persistence Gates" (in `store.clj` or `agent.clj` checkpoints) serialize the system map to disk only when the system is in a stable, quiescent state.
+- **Result**: Zero-latency tool execution and guaranteed state consistency across concurrent tool calls.
+## 83. Babashka 1.12+ Evolution & Specter Compatibility (May 2026)
+- **Observation**: Babashka v1.12.x introduced JLine3 integration and significant improvements to `deftype` and macroexpansion (Revenge of the TUIs). This unlocked high-performance Clojure libraries like **Specter** and **Cloverage** that were previously incompatible.
+- **Learning**: The "Simple Made Easy" gap between BB and JVM-Clojure has narrowed significantly. We can now use **Specter** to replace verbose `update-in`/`assoc-in` chains with declarative, path-based data transformations, which aligns perfectly with the "Pure Data Pipeline" (Pattern 16).
+- **Hardening with deftype**: The new `IPersistentMap` support for `deftype` allows for a **ValidatedSystemMap**. This is a "Rich Hickey" power move: a custom type that behaves like a map (simple interface) but enforces structural integrity (e.g. no atoms allowed in the registry) at the moment of update. This prevents the `ClassCastException` bugs documented in learning #77.
+- **TUI Dashboard**: JLine3 enables building advanced "Pilot" mode TUIs with tab-completion and ghost text, significantly reducing the "discovery latency" for human developers during agent-fixing sessions.
+- **Actionable Recommendation**: Fully integrate Specter for system map transitions and implement a `ValidatedSystemMap` to certify architectural purity.

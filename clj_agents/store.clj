@@ -29,3 +29,22 @@
 (defn get-session-messages [session-id]
   (let [db (load-db)]
     (get-in db [:messages (keyword session-id)] [])))
+
+(defn- get-stats-file []
+  (io/file (io/file (System/getProperty "user.home") ".hermes" "skills") "stats.json"))
+
+(defn save-system-state! [system]
+  (let [cron-jobs (get system :cron-jobs {})
+        skill-stats (get system :skill-stats {})]
+    (spit "jobs.json" (json/generate-string (vals cron-jobs) {:pretty true}))
+    (spit (get-stats-file) (json/generate-string skill-stats))))
+
+(defn update-skill-stats! [skill-name success?]
+  (let [f (get-stats-file)
+        stats (if (.exists f) (json/parse-string (slurp f) true) {})
+        current (get stats (keyword skill-name) {:hits 0 :successes 0})
+        new-entry (-> current
+                      (update :hits inc)
+                      (update :successes (fn [s] (if success? (inc s) s))))
+        new-stats (assoc stats (keyword skill-name) new-entry)]
+    (spit f (json/generate-string new-stats))))

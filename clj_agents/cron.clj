@@ -17,9 +17,8 @@
       \d (* num 86400)
       (throw (Exception. (str "Unknown unit: " unit))))))
 
-(defn parse-schedule [expr]
-  (let [now (System/currentTimeMillis)
-        expr (str/trim expr)]
+(defn parse-schedule [expr now]
+  (let [expr (str/trim expr)]
     (cond
       (str/starts-with? expr "every ")
       [(+ now (* 1000 (parse-duration (subs expr 6)))) false]
@@ -30,46 +29,29 @@
       :else ;; Default to 1 min for unknown/cron-lite
       [(+ now 60000) false])))
 
-(defn load-jobs! [system]
-  (let [f (io/file "jobs.json")
-        job-store (get system :cron-jobs (atom {}))]
-    (when (.exists f)
-      (let [data (json/parse-string (slurp f) true)]
-        (reset! job-store (into {} (for [j data] [(:job-id j) (map->CronJob j)])))))))
+(defn add-job [job]
+  (fn [system]
+    (assoc-in system [:cron-jobs (:job-id job)] job)))
 
-(defn save-jobs! [system]
-  (let [job-store (get system :cron-jobs (atom {}))]
-    (spit "jobs.json" (json/generate-string (vals @job-store) {:pretty true}))))
+(defn remove-job [id]
+  (fn [system]
+    (update system :cron-jobs dissoc id)))
 
-(defn add-job! [system job]
-  (let [job-store (get system :cron-jobs (atom {}))]
-    (swap! job-store assoc (:job-id job) job)
-    (save-jobs! system)))
-
-(defn remove-job! [system id]
-  (let [job-store (get system :cron-jobs (atom {}))]
-    (swap! job-store dissoc id)
-    (save-jobs! system)))
-
-(defn get-due-jobs [system]
+(defn add-job-tool [system job-args]
   (let [now (System/currentTimeMillis)
-        job-store (get system :cron-jobs (atom {}))]
-    (filter (fn [j] (>= now (:next-fire j))) (vals @job-store))))
+        [next-fire one-shot] (parse-schedule (:schedule job-args) now)
+        job (assoc (map->CronJob job-args) :next-fire next-fire :one-shot one-shot)]
+    {:result "Job added" :system-update (add-job job)}))
 
-(defn advance-job! [system job]
+(defn remove-job-tool [system id]
+  {:result "Job removed" :system-update (remove-job id)})
+
+(defn get-due-jobs [system now]
+  (let [jobs (get system :cron-jobs {})]
+    (filter (fn [j] (>= now (:next-fire j))) (vals jobs))))
+
+(defn advance-job [job now]
   (if (:one-shot job)
-    (remove-job! system (:job-id job))
-    (let [[next-fire _] (parse-schedule (:schedule job))]
-      (add-job! system (assoc job :next-fire next-fire)))))
-
-(defn start-scheduler! [system fire-callback]
-  (future
-    (loop []
-      (let [due (get-due-jobs system)]
-        (doseq [job due]
-          (try
-            (fire-callback job)
-            (catch Exception e (println "Job failed:" (ex-message e))))
-          (advance-job! system job))
-        (Thread/sleep 30000)
-        (recur)))))
+    (remove-job (:job-id job))
+    (let [[next-fire _] (parse-schedule (:schedule job) now)]
+      (add-job (assoc job :next-fire next-fire)))))

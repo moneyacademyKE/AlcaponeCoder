@@ -12,14 +12,9 @@
         plan (:plan args)]
     (if-not plan
       (json/generate-string {:status "error" :message "Missing 'plan' argument"})
-      ;; Store plan in a mutable session atom if available, so it survives turns.
-      ;; The plan atom is stored at (:plan-atom system) by harbor.clj initialization.
-      (let [plan-atom (:plan-atom system)]
-        (if plan-atom
-          (do (reset! plan-atom plan)
-              (json/generate-string {:status "ok" :message "Plan updated"}))
-          ;; Fallback: no atom available (test environment) — acknowledge but can't persist.
-          (json/generate-string {:status "ok" :message "Plan acknowledged (no persistent store in this context)"}))))))
+      ;; Return a pure data update instead of mutating an atom
+      {:result (json/generate-string {:status "ok" :message "Plan updated"})
+       :system-update (fn [sys] (assoc-in sys [:state :plan] plan))})))
 
 (def plan-schema
   {:type "function"

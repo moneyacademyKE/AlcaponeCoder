@@ -35,3 +35,9 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+tests_out.txt
+
+# State
+state.db*
+test_state.db*
+state.json
