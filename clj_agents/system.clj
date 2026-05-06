@@ -14,70 +14,36 @@
             [tools.multimedia]
             [tools.xml]))
 
-(defn- validate-system-key [k v]
-  (case k
-    :registry (when (not (map? v))
-                (throw (AssertionError. (str "System key :registry must be a Map, got: " (type v)))))
-    :budget (when (not (number? v))
-              (throw (AssertionError. (str "System key :budget must be a Number, got: " (type v)))))
-    :approvals (when (not (map? v))
-                 (throw (AssertionError. (str "System key :approvals must be a Map, got: " (type v)))))
-    :cron-jobs (when (not (map? v))
-                 (throw (AssertionError. (str "System key :cron-jobs must be a Map, got: " (type v)))))
-    :browser-process (when (not (or (nil? v) (instance? clojure.lang.Atom v)))
-                       (throw (AssertionError. (str "System key :browser-process must be an Atom or nil, got: " (type v)))))
-    nil))
-
-(deftype ValidatedSystemMap [m]
-  clojure.lang.IPersistentMap
-  (assoc [_ k v]
-    (validate-system-key k v)
-    (ValidatedSystemMap. (assoc m k v)))
-  (without [_ k]
-    (ValidatedSystemMap. (dissoc m k)))
-
-  clojure.lang.ILookup
-  (valAt [_ k] (get m k))
-  (valAt [_ k default] (get m k default))
-
-  clojure.lang.IPersistentCollection
-  (count [_] (count m))
-  (seq [_] (seq m))
-  (cons [_ o] (ValidatedSystemMap. (conj m o)))
-  (empty [_] (ValidatedSystemMap. {}))
-  (equiv [_ o] (and (instance? ValidatedSystemMap o) (= m (.-m ^ValidatedSystemMap o))))
-
-  clojure.lang.Associative
-  (containsKey [_ k] (contains? m k))
-  (entryAt [_ k] (find m k))
-
-  java.lang.Iterable
-  (iterator [_] (.iterator m))
-
-  clojure.lang.IFn
-  (invoke [_ k] (get m k))
-  (invoke [_ k default] (get m k default)))
+(defn validate-system [system]
+  (let [{:keys [registry budget approvals cron-jobs browser-process]} system]
+    (when (and registry (not (map? registry)))
+      (throw (Exception. (str "System key :registry must be a Map, got: " (type registry)))))
+    (when (and budget (not (number? budget)))
+      (throw (Exception. (str "System key :budget must be a Number, got: " (type budget)))))
+    (when (and approvals (not (map? approvals)))
+      (throw (Exception. (str "System key :approvals must be a Map, got: " (type approvals)))))
+    (when (and cron-jobs (not (map? cron-jobs)))
+      (throw (Exception. (str "System key :cron-jobs must be a Map, got: " (type cron-jobs)))))
+    system))
 
 (defn create-system [& {:keys [session-id config]}]
   (let [base {:id (or session-id (str (java.util.UUID/randomUUID)))
               :config (or config {})
-              :budget (get-in config [:agent :max_turns] 90) ;; Value, not atom
+              :budget (get-in config [:agent :max_turns] 90)
               :depth 0
               :env (backend/create-env :local)
-              :registry {}  ;; Plain map — not atom (pure system map pattern)
+              :registry {}
               :hooks {}
               :approvals {}
               :cron-jobs {}
               :skill-stats {}
               :state {:turns-since-memory 0
                       :iters-since-skill 0
-                      :plan "No plan established yet."} ;; Pure string plan
-              :browser-process (atom nil)}
-        ;; Initialize with the Validated wrapper
-        system (ValidatedSystemMap. base)]
-
-    ;; Thread system through all register-tools calls (pure — each returns enriched system)
-    (-> system
+                      :plan "No plan established yet."}
+              :browser-process (atom nil)}]
+    
+    ;; Thread system through all register-tools calls
+    (-> base
         (memory/register-tools)
         (skill/register-tools)
         (delegation/register-tools)
@@ -86,7 +52,8 @@
         (tools.system-tools/register-tools)
         (tools.patch/register-tools)
         (tools.multimedia/register-tools)
-        (tools.xml/register-tools))))
+        (tools.xml/register-tools)
+        (validate-system))))
 
 (defn cleanup [system]
   (println "[SYSTEM] Cleaning up resources...")
