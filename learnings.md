@@ -114,3 +114,30 @@
 - **Observation**: An inline Clojure wrapper string embedded inside `hermes_bb.py` is brittle — it creates a dependency between the Python runner and the Clojure logic's initialization sequence, and bypasses all error handling in `harbor.clj`.
 - **Learning**: Moving the entry point to a dedicated `harbor.clj` script that is executed directly by `bb` decouples the Python orchestrator from the Clojure agent completely. Python only needs to know the file path, not the startup sequence.
 - **Result**: The `hermes_bb.py` `run` method is now a single `exec_as_agent` call — simpler, more robust, and guaranteed to exit 0 even on agent failure.
+
+## 77. Registry Atom/Map Mismatch — Half-Migration Causes Fatal Crash (CRITICAL)
+- **Observation**: After migrating to the pure System Map pattern, `system/create-system` still initialized `:registry` as `(atom {})`. Meanwhile, some modules called `registry/register` (the pure map update path) while others called `registry/register!` (the atom swap path). The pure path called `(update system :registry ...)` which crashes with `ClassCastException: Atom cannot be cast to Associative`.
+- **Learning**: A partial migration between architectural patterns is **worse than either pure state** — it creates a hidden split that only fails at runtime. The fix is to **fully commit to one pattern**: initialize `:registry` as a plain `{}` map, and thread the system through all `register-tools` calls using `->` threading so each call returns the enriched system.
+- **Canonical Pattern**:
+  ```clojure
+  ;; WRONG: atom init + mixed registration causes ClassCastException
+  {:registry (atom {})}  ;; Then calling (registry/register system ...) → CRASH
+  
+  ;; CORRECT: plain map init + pure threading
+  {:registry {}}  ;; Then:
+  (-> base
+      (memory/register-tools)
+      (tools.terminal/register-tools)
+      ...)           ;; Each returns enriched system map
+  ```
+- **Result**: System now creates cleanly with 13 tools registered. Harbor exits 0.
+
+## 78. Config Key Drift Between Layers
+- **Observation**: `config.clj` defined `:compression {:threshold_tokens 20000}` but `agent.clj` read `(get-in config [:compression :threshold_chars] 25000)`. The mismatch meant compression threshold config was **silently ignored** — always falling back to the default 25,000.
+- **Learning**: When adding config keys, always grep for all read-sites to ensure the key name is consistent. Key drift is invisible at runtime — the system "works" but isn't following config. Use a single `(def compression-config-defaults {:threshold_chars 25000})` pattern and reference it.
+- **Result**: Fixed both to use `:threshold_chars`. Compression threshold now respects `config.yaml` settings.
+
+## 79. Dead Code Accumulation from Incremental Chapter-Based Development
+- **Observation**: The `clj_agents/sNN_*.clj` files were "chapter demos" from the initial port phase — early standalone scripts that duplicated logic now living in the real production modules (`agent.clj`, `compression.clj`, etc.). They accumulated to 24 files with 20 associated dead test files, adding confusion and causing test failures when they referenced removed global APIs.
+- **Learning**: Chapter-based demo scripts should be deleted **immediately** after the real module is certified green. The signal to delete is: "does this file have a `(when (= *file* ...) ...)` main guard and does it require a module that is now a real production file?" If yes, delete it.
+- **Result**: 44 files deleted. Codebase is now clean — only production modules and their corresponding real tests remain.

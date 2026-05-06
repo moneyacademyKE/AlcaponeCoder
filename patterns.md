@@ -145,3 +145,29 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 1. Top-level `try-catch` in entry points (e.g. `harbor.clj`) to catch unexpected failures.
 2. Logic-level handlers return data maps that include the updated `system` map even on failure.
 **Benefit**: Prevents "Non-Zero Exit" failures in automated pipelines and allows for deterministic tracing of failures.
+
+## Pattern 15: Pure Registration Threading (Commit Fully to One Pattern)
+**Context**: Partial migration from atom-based to value-based registration creates a hidden runtime crash: `ClassCastException: Atom cannot be cast to Associative`.
+**Solution**: Fully commit to pure system map threading. Never mix `register!` (atom) with `register` (pure) in the same system lifecycle.
+**Implementation**:
+```clojure
+;; system/create-system — plain map, never atom
+(let [base {:registry {} ...}]
+  (-> base
+      (module-a/register-tools)    ;; returns enriched system
+      (module-b/register-tools)    ;; threads through
+      (module-c/register-tools)))  ;; final enriched system
+
+;; Each module
+(defn register-tools [system]
+  (registry/register system {:name "tool" :handler ...}))
+(defn register-tools! [system] (register-tools system)) ;; legacy alias
+```
+**Benefit**: Atomic, deterministic, testable. System creation is a pure data transformation.
+**Anti-pattern**: `(atom {})` for `:registry` + calling `registry/register` (pure) = silent runtime crash.
+
+## Pattern 16: Config Key Consistency Guard
+**Context**: Config keys defined at write-site (defaults map) and read-site (agent loop) drift silently — the system uses defaults and appears to "work" while ignoring all user config.
+**Solution**: When writing a new config key, immediately grep all read-sites. Name the key at definition time and use a `def` constant to share it.
+**Verification**: `grep -r "threshold" clj_agents/` after every config change to ensure write/read sites agree.
+**Result**: Silent config ignorance is eliminated — system respects `config.yaml` settings.
