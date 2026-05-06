@@ -133,68 +133,68 @@ def main():
 
     with PIDLock():
         if not DATASET_PATH.exists():
-        print(f"Dataset path {DATASET_PATH} not found.")
-        return
-
-    if not args.skip_ping:
-        if not ping_model(args.model):
-            print("Aborting due to model unreachability.")
+            print(f"Dataset path {DATASET_PATH} not found.")
             return
 
-    tasks = sorted([d.name for d in DATASET_PATH.iterdir() if d.is_dir()])
-    log_file = Path("benchmark_progress.log")
-    completed_tasks = set()
-    if log_file.exists():
-        completed_tasks = set(line.strip() for line in log_file.read_text().splitlines() if line.strip())
+        if not args.skip_ping:
+            if not ping_model(args.model):
+                print("Aborting due to model unreachability.")
+                return
 
-    db = Dashboard(len(tasks))
-    for t in completed_tasks:
-        db.update(t, success=True) # Assume previous were successful for stats
+        tasks = sorted([d.name for d in DATASET_PATH.iterdir() if d.is_dir()])
+        log_file = Path("benchmark_progress.log")
+        completed_tasks = set()
+        if log_file.exists():
+            completed_tasks = set(line.strip() for line in log_file.read_text().splitlines() if line.strip())
 
-    stop_logs = threading.Event()
-    log_thread = threading.Thread(target=tail_logs, args=(stop_logs,), daemon=True)
-    log_thread.start()
+        db = Dashboard(len(tasks))
+        for t in completed_tasks:
+            db.update(t, success=True) # Assume previous were successful for stats
 
-    try:
-        for i, task in enumerate(tasks, 1):
-            if task in completed_tasks:
-                continue
+        stop_logs = threading.Event()
+        log_thread = threading.Thread(target=tail_logs, args=(stop_logs,), daemon=True)
+        log_thread.start()
 
-            db.update(task)
-            
-            cmd = [
-                "uv", "run", "harbor", "run",
-                "--dataset", "terminal-bench@2.0",
-                "-i", task,
-                "--agent", args.agent,
-                "--model", args.model,
-                "--n-concurrent", "1"
-            ]
-            
-            start_time = time.time()
-            trace_id = str(uuid.uuid4())
-            env = os.environ.copy()
-            env["HARBOR_TRACE_ID"] = trace_id
-            
-            try:
-                result = subprocess.run(cmd, cwd=HARBOR_DIR, env=env)
-                success = (result.returncode == 0)
-                db.update(task, success=success)
+        try:
+            for i, task in enumerate(tasks, 1):
+                if task in completed_tasks:
+                    continue
+
+                db.update(task)
                 
-                with open(log_file, "a") as f:
-                    f.write(f"{task}\n")
+                cmd = [
+                    "uv", "run", "harbor", "run",
+                    "--dataset", "terminal-bench@2.0",
+                    "-i", task,
+                    "--agent", args.agent,
+                    "--model", args.model,
+                    "--n-concurrent", "1"
+                ]
+                
+                start_time = time.time()
+                trace_id = str(uuid.uuid4())
+                env = os.environ.copy()
+                env["HARBOR_TRACE_ID"] = trace_id
+                
+                try:
+                    result = subprocess.run(cmd, cwd=HARBOR_DIR, env=env)
+                    success = (result.returncode == 0)
+                    db.update(task, success=success)
                     
-            except Exception as e:
-                print(f"Error running task {task}: {e}")
-                db.update(task, success=False)
-            
-            if i < len(tasks):
-                time.sleep(args.delay)
-    except KeyboardInterrupt:
-        print("\nInterrupted.")
-    finally:
-        stop_logs.set()
-        log_thread.join(timeout=1)
+                    with open(log_file, "a") as f:
+                        f.write(f"{task}\n")
+                        
+                except Exception as e:
+                    print(f"Error running task {task}: {e}")
+                    db.update(task, success=False)
+                
+                if i < len(tasks):
+                    time.sleep(args.delay)
+        except KeyboardInterrupt:
+            print("\nInterrupted.")
+        finally:
+            stop_logs.set()
+            log_thread.join(timeout=1)
 
 if __name__ == "__main__":
     main()
