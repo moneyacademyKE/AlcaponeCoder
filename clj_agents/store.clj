@@ -58,7 +58,8 @@
   (let [id (get system :id "unknown")
         f (io/file (get-session-dir) (str id ".json"))
         ;; Exclude atoms and huge internal caches
-        serializable (dissoc system :state :browser-process :registry)]
+        ;; :state is a plain map, keep it.
+        serializable (dissoc system :browser-process :registry)]
     (spit f (json/generate-string serializable {:pretty true}))))
 
 (defn load-checkpoint [id]
