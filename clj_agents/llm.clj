@@ -33,12 +33,26 @@
       (catch Exception e
         {:status :error :code 503 :message (str "HTTP Request failed: " (ex-message e))}))))
 
+(defn- sleep [ms]
+  (Thread/sleep ms))
+
 (defn call 
-  "High-level caller. Supports :primary or :fallback keys."
+  "High-level caller with exponential backoff for 429 and 5xx errors."
   [system messages system-prompt model-key]
   (let [model-id (get-model-id system model-key)
-        _ (logger/info system :llm_call {:model model-id :role model-key})]
-    (call-model system messages system-prompt model-id)))
+        retry-limit (get-in system [:config :agent :retry_limit] 10)]
+    (loop [attempt 1
+           delay 1000]
+      (let [_ (logger/info system :llm_call {:model model-id :role model-key :attempt attempt})
+            res (call-model system messages system-prompt model-id)]
+        (if (or (= :ok (:status res))
+                (>= attempt retry-limit)
+                (not (contains? #{429 500 502 503 504} (:code res))))
+          res
+          (do
+            (logger/warn system :api_retry {:attempt attempt :reason (if (= 429 (:code res)) "rate-limit" "server-error")})
+            (sleep delay)
+            (recur (inc attempt) (* delay 2))))))))
 
 (defn call-with-fallback
   "Attempts primary model, falls back to secondary on error."
@@ -50,7 +64,6 @@
         (logger/warn system :llm_fallback {:reason (:message primary-res)})
         (call system messages system-prompt :fallback)))))
 
-;; Legacy compatibility shims (to be removed once all callers are updated)
 (defn call-auxiliary-llm [system prompt-text]
   (let [model-key (if (get-in system [:config :models :auxiliary]) :auxiliary :fallback)
         res (call system [{:role "user" :content prompt-text}] "You are a helpful assistant." model-key)]
