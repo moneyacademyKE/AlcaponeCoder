@@ -320,6 +320,12 @@ Why persistent? Because some async resources (such as browser sessions and WebSo
 
 **One-sentence summary**: The main loop stays synchronous for simplicity. Only when it encounters an async tool does it hand the task to a resident event loop for execution, then takes the result back and continues the synchronous flow.
 
+### 4. Trace-ID Telemetry (Task Grouping)
+
+In complex agentic systems, logs from multiple concurrent tasks or nested agent calls become "interleaved" and hard to follow. 
+
+Hermes Agent solves this by injecting a unique `trace-id` into the system map at the start of every top-level task. This ID is propagated to all structured log entries (tool calls, LLM attempts, compaction events), allowing real-time monitors to filter and stream task-specific telemetry with high signal.
+
 ## Most Common Beginner Mistakes
 
 ### 1. Not Writing Back the Assistant Message

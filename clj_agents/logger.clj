@@ -32,17 +32,21 @@
         entry {:timestamp (str (java.time.Instant/now))
                :level level
                :session_id (:id system)
+               :trace_id (:trace-id system)
                :event_type event-type
                :data clean-data}
         json-line (json/generate-string entry)
-        human-line (str "[" (.toUpperCase (name level)) "] " event-type " - " (json/generate-string clean-data) "\n")]
+        human-prefix (str "[" (.toUpperCase (name level)) "] " 
+                          (when-let [tid (:trace-id system)] (str "(" tid ") "))
+                          event-type " - ")
+        human-line (str human-prefix (json/generate-string clean-data) "\n")]
     ;; Structured JSON log — stable path
     (spit (log-file) (str json-line "\n") :append true)
     ;; Harbor benchmark agent log (if mount exists)
     (when-let [af (agent-log-file)]
       (spit af human-line :append true))
     ;; Terminal output
-    (println (str "[" (.toUpperCase (name level)) "] " event-type " - " (json/generate-string clean-data)))))
+    (println (str human-prefix (json/generate-string clean-data)))))
 
 (defn info [system event-type data] (log! :info system event-type data))
 (defn warn [system event-type data] (log! :warn system event-type data))

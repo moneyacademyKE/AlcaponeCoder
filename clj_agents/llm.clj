@@ -8,6 +8,24 @@
   (or (get-in system [:config :models model-key])
       (get-in system [:config :models :primary])))
 
+(defn ping-model 
+  "Sends a minimal request to check if the model is alive."
+  [system model-id]
+  (let [config (:config system)
+        payload {:model model-id
+                 :messages [{:role "user" :content "ping"}]
+                 :max_tokens 1}
+        body (json/generate-string payload)]
+    (try
+      (let [res (http/post (str (:base-url config) "/chat/completions")
+                           {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                      "Content-Type" "application/json"}
+                            :body body
+                            :timeout 30000
+                            :throw false})]
+        (= 200 (:status res)))
+      (catch Exception _ false))))
+
 (defn call-model 
   "Low-level model caller. Takes an explicit model-id string."
   [system messages system-prompt model-id]

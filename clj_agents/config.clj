@@ -4,7 +4,7 @@
             [clj-yaml.core :as yaml]))
 
 (def default-config
-  {:models {:primary "meta-llama/llama-3.3-70b-instruct:free"
+  {:models {:primary "tencent/hy3-preview:free"
             :fallback "inclusionai/ling-2.6-1t:free"
             :auxiliary "inclusionai/ling-2.6-1t:free"}
    :base-url "https://openrouter.ai/api/v1"

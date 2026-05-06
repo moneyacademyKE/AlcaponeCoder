@@ -39,6 +39,7 @@
         ;; but test systems may pass minimal maps, so we guard with fnil.
         now (System/currentTimeMillis)
         due-jobs (cron/get-due-jobs system now)
+        system (assoc system :trace-id (str (java.util.UUID/randomUUID)))
         system (reduce (fn [sys job]
                          (println (str "[CRON] Firing job: " (:job-id job)))
                          ((cron/advance-job job now) sys))

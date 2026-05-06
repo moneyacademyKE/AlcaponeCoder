@@ -284,6 +284,12 @@ In the benchmark environment (Harbor), success rates often suffer not from model
 - **Rich Hickey Fix**: Instead of "complecting" the agent with the environment, we implemented a layered **Implicit Auth Discovery Pattern**. The config system now proactively searches for `.env` files in institutional directories (`~/.hermes/`) and supports fallback keys.
 - **Result**: Architectural unblocking allowed the success rate to rise toward the **75%+** target by ensuring the model always has a valid API conduit.
 
+### Benchmark Observability: The Trace-ID Dashboard
+- **Observation**: Running long-duration benchmarks (80+ tasks) is "silent" — failures are only discovered after hours of execution.
+- **Problem**: Standard `harbor run` output is verbose but lacks agent-specific reasoning traces.
+- **Pattern**: Implement **Trace-ID Telemetry**. Every task generates a unique ID, which is echoed in structured logs. A Python-based dashboard tails the log, filters by ID, and provides a real-time progress view with success/failure rates and ETA.
+- **Result**: Immediate visibility into agent stalls or tool failures allowed for "Live Debugging" during official runs, significantly reducing the "discovery-to-fix" latency.
+
 ---
 
 **Remember in one sentence: collect feedback -> have the LLM rewrite with purpose -> score -> keep if better, discard otherwise. Repeat N rounds; deploy if constraints pass.**

@@ -237,3 +237,12 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 **Context**: External service failures (LLM APIs) are a form of "noise" in the system's execution pipeline.
 **Solution**: Implement retry logic with exponential backoff as close to the I/O boundary as possible (in `llm.clj`).
 **Benefit**: Keeps the high-level agent loop clean and focused on reasoning, while the low-level "shell" handles the messy reality of network I/O.
+
+## Pattern 22: Trace-ID Telemetry (Task Grouping)
+**Context**: In complex agentic systems, logs from multiple concurrent tasks or nested agent calls become "interleaved" and hard to follow.
+**Solution**: Inject a unique `trace-id` into the system map at the start of a top-level task and propagate it to all telemetry.
+**Implementation**:
+1.  **Generation**: At the start of `run-conversation`, `(assoc system :trace-id (str (java.util.UUID/randomUUID)))`.
+2.  **Propagation**: The `logger/log!` function extracts `:trace_id` from the system map and includes it in both JSON and human-readable output.
+3.  **Consumption**: Real-time log monitors (like `run_official_benchmark.py`) can tail the log file and filter by the current task's `trace-id` to provide an isolated, high-signal stream of events.
+**Benefit**: Provides high-resolution observability without increasing system complexity. De-complects "Event Generation" from "Telemetry Visualization".

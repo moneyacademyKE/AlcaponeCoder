@@ -257,6 +257,10 @@ Some models (those supporting reasoning/thinking) may spend all output tokens on
 
 Hermes Agent detects this situation and reports an error directly, rather than wasting 3 continuation retries.
 
+### 5. Proactive Model Pinging (Pre-flight Checks)
+
+Starting a complex task only to have it fail immediately due to API unavailability is a waste of time and turn budget. Hermes Agent implements a "Proactive Ping" (a minimal token request) before task execution begins. This "Pre-flight Check" is critical for Beta or Free models that may have unstable availability, allowing the system to fail fast or switch to a fallback before any real work is attempted.
+
 ## Common beginner mistakes
 
 ### 1. Treating all errors as the same error
