@@ -12,7 +12,8 @@
             [tools.system-tools]
             [tools.patch]
             [tools.multimedia]
-            [tools.xml]))
+            [tools.xml]
+            [store]))
 
 (defn validate-system [system]
   (let [{:keys [registry budget approvals cron-jobs browser-process]} system]
@@ -53,7 +54,14 @@
         (tools.patch/register-tools)
         (tools.multimedia/register-tools)
         (tools.xml/register-tools)
-        (validate-system))))
+        (validate-system)
+        (as-> sys
+          (do (.addShutdownHook (Runtime/getRuntime) 
+                                (Thread. (fn [] 
+                                           (println "\n[SHUTDOWN] Process terminating...")
+                                           (store/save-checkpoint! sys)
+                                           (cleanup sys))))
+              sys)))))
 
 (defn cleanup [system]
   (println "[SYSTEM] Cleaning up resources...")

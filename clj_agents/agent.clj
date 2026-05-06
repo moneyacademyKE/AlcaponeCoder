@@ -32,6 +32,13 @@
 
 (defn run-conversation [system user-message agent-state]
   (let [session-id (:id system)
+        checkpoint (when session-id (store/load-checkpoint session-id))
+        ;; Deep Hardening: Restore logical state from checkpoint if it exists
+        system (if checkpoint
+                 (do (println (str "[SYSTEM] Resuming from checkpoint: " session-id))
+                     (merge system checkpoint))
+                 system)
+        
         history (if session-id (store/get-session-messages session-id) [])
         initial-messages (conj history {:role "user" :content user-message})
         
@@ -77,7 +84,10 @@
                 ;; Decrement budget (always a value now)
                 current-system (update current-system :budget dec)
                 
-                ;; Checkpointing (every 20 turns)
+                ;; Checkpointing (at turn start and every 20 turns for memory)
+                _ (when session-id
+                    (store/save-checkpoint! current-system))
+                
                 _ (when (and (pos? iteration) (zero? (mod iteration 20)))
                     (logger/info current-system "checkpoint" {:turn iteration})
                     ;; Serialize system state to persistent store (Imperative Shell)

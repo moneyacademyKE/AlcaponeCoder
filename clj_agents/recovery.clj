@@ -20,16 +20,16 @@
       {:reason :server-error :retryable true :should-compress false :should-fallback false}
       
       (contains? #{401 403} status-code)
-      {:reason :auth :retryable false :should-compress false :should-fallback false}
+      {:reason :auth :retryable false :should-compress false :should-fallback true}
       
       (= status-code 402)
       {:reason :payment-required :retryable false :should-compress false :should-fallback true}
       
-      (= status-code 404)
+      (or (= status-code 404) (str/includes? msg "model_not_found"))
       {:reason :model-not-found :retryable false :should-compress false :should-fallback true}
       
       :else
-      {:reason :unknown :retryable (>= (or status-code 0) 500) :should-compress false :should-fallback false})))
+      {:reason :unknown :retryable (>= (or status-code 0) 500) :should-compress false :should-fallback (>= (or status-code 0) 500)})))
 
 (defn jittered-backoff [attempt]
   (let [base-delay 2000 ;; 2 seconds

@@ -48,3 +48,21 @@
                       (update :successes (fn [s] (if success? (inc s) s))))
         new-stats (assoc stats (keyword skill-name) new-entry)]
     (spit f (json/generate-string new-stats))))
+
+(defn- get-session-dir []
+  (let [dir (io/file (System/getProperty "user.home") ".hermes" "sessions")]
+    (.mkdirs dir)
+    dir))
+
+(defn save-checkpoint! [system]
+  (let [id (get system :id "unknown")
+        f (io/file (get-session-dir) (str id ".json"))
+        ;; Exclude atoms and huge internal caches
+        serializable (dissoc system :state :browser-process :registry)]
+    (spit f (json/generate-string serializable {:pretty true}))))
+
+(defn load-checkpoint [id]
+  (let [f (io/file (get-session-dir) (str id ".json"))]
+    (if (.exists f)
+      (json/parse-string (slurp f) true)
+      nil)))

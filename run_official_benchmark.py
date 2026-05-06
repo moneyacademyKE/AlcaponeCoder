@@ -5,6 +5,7 @@ import time
 import argparse
 import json
 import threading
+import uuid
 from pathlib import Path
 from datetime import datetime
 
@@ -149,8 +150,12 @@ def main():
             ]
             
             start_time = time.time()
+            trace_id = str(uuid.uuid4())
+            env = os.environ.copy()
+            env["HARBOR_TRACE_ID"] = trace_id
+            
             try:
-                result = subprocess.run(cmd, cwd=HARBOR_DIR, env=os.environ.copy())
+                result = subprocess.run(cmd, cwd=HARBOR_DIR, env=env)
                 success = (result.returncode == 0)
                 db.update(task, success=success)
                 

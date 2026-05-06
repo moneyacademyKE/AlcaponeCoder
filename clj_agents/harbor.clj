@@ -16,7 +16,9 @@
             model (System/getenv "HARBOR_MODEL")
             cfg (if model (assoc-in cfg [:models :primary] model) cfg)]
         (store-init-db!)
-        (let [sys (system-create-system :config cfg)
+        (let [trace-id (System/getenv "HARBOR_TRACE_ID")
+              sys (system-create-system :config cfg)
+              sys (if trace-id (assoc sys :trace-id trace-id) sys)
               result (agent-run-conversation sys (System/getenv "HARBOR_INSTRUCTION") (:state sys))]
           (if (= :error (:status result))
             (do
