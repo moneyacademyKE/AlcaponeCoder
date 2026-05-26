@@ -308,6 +308,17 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 2. **Git Status & Recency tracking**: Query git status using porcelain outputs and fallback to filesystem modification timestamps (`lastModified`) to compile a list of active files.
 **Benefit**: Speeds up targeted debugging by helping the agent locate modified and high-complexity files instantly.
 
+## Pattern 29: The Fused Code Context Pattern
+**Context**: Agents waste valuable turn budgets and API call cycles sequentially calling search, outline, read, and caller tools to resolve codebase structure around a task.
+**Solution**: Provide a unified, task-oriented context tool that parses natural language, ranks implementation files using simple heuristics, extracts match windows, and resolves references in one invocation.
+**Implementation**:
+1. **Keyword Extraction**: Clean task descriptions using a stopword filter to produce lowercase keywords.
+2. **Scored File Ranking**: Scan workspace files and calculate relevance scores, boosting symbol definitions (+5) while penalizing tests (-3) and markdown docs (-2).
+3. **Window Merging**: Match lines containing keywords, generate ±2 context line ranges, and merge overlapping or adjacent boundaries.
+4. **Usage Reference Indexing**: Search for calls to defined symbols in non-defining files.
+**Benefit**: Reduces reasoning loop turns, lowers overall token consumption, and consolidates workspace discovery into a single tool invocation.
+
+
 
 
 

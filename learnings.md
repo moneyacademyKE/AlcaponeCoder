@@ -214,6 +214,12 @@
 - **Learning**: Performing a systematic Gap Analysis reveals high-utility, low-complexity gaps. By extending the native tree builder to return metadata (file sizes) and adding a `codedb_hot` tool (which aggregates git status modified files and recently changed files), we give the agent richer context with negligible overhead.
 - **Result**: Implemented size-extended tree output, added `codedb_hot`, robustified path handling using substring lengths, and registered the new tools in `codedb.clj`.
 
+## 94. Fused Code Context (codedb_context Composer)
+- **Observation**: While individual code-intelligence tools (`codedb_search`, `codedb_outline`, `codedb_deps`) prevent reading whole files, the agent still spends 3-4 consecutive reasoning turns query-linking and reference-tracing to build a context picture.
+- **Learning**: We can compile search query keywords, symbol definitions, file scoring heuristics, and caller tracking into a unified "context composer" tool. By performing stopword-filtered keyword extraction, scoring files (+5 definitions, -3 tests, -2 docs), merging overlapping context windows (±2 lines), and resolving reference locations project-wide, we provide a rich, single-turn context block.
+- **Result**: Implemented the native `codedb_context` tool in `codedb.clj`, cutting context-gathering tool call counts by up to 75% on discovery tasks.
+
+
 
 
 

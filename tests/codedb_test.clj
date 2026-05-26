@@ -109,4 +109,29 @@
                                                          :skills "Agent skills"})]
       (is (clojure.string/includes? prompt-str "# Codebase Map (Files & Structure)")))))
 
+(deftest test-extract-query-keywords
+  (testing "Extracts keywords and removes stopwords"
+    (is (= #{"clojure" "implement" "spec"}
+           (codedb/extract-query-keywords "how to implement spec in clojure?")))))
+
+(deftest test-merge-intervals
+  (testing "Merges overlapping and adjacent intervals"
+    (is (= [[1 5] [7 10]]
+           (codedb/merge-intervals [[1 3] [2 5] [7 10]])))))
+
+(deftest test-codedb-context-tool
+  (testing "codedb-context-tool returns a consolidated response block"
+    (let [temp-dir (io/file "/tmp/hermes-codedb-context-test")
+          _ (.mkdirs temp-dir)
+          file-a (io/file temp-dir "a.clj")
+          file-b (io/file temp-dir "a_test.clj")
+          _ (spit file-a "(ns a) (defn calculate [x] (+ x 10))")
+          _ (spit file-b "(ns a-test) ;; test for calculate")
+          res (codedb/codedb-context-tool {} {:query "how to calculate" :root-dir (.getAbsolutePath temp-dir)})
+          result-str (:result res)]
+      (is (clojure.string/includes? result-str "calculate"))
+      (is (clojure.string/includes? result-str "a.clj"))
+      (is (not (clojure.string/includes? result-str "### File: `a_test.clj`"))))))
+
+
 

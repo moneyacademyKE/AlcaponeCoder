@@ -175,6 +175,169 @@
                            [name deps]))]
     {:result (json/generate-string dep-map)}))
 
+(defn extract-query-keywords [task]
+  (if (empty? task)
+    #{}
+    (let [stopwords #{"the" "a" "an" "and" "or" "but" "in" "on" "at" "to" "for" "of" "with" "is" "are" "was" "were" "be" "been" "this" "that" "how" "does" "do" "into" "one" "fuses" "search" "outline" "symbol" "callers" "instead" "we" "i" "you" "he" "she" "they" "it" "my" "your" "his" "her" "their" "its" "can" "will" "would" "should" "could" "what" "why" "where" "when" "who" "which" "about" "has" "have" "had" "not" "no" "yes" "if" "then" "else"}
+          words (str/split (str/lower-case task) #"\W+")]
+      (->> words
+           (remove stopwords)
+           (filter #(> (count %) 2))
+           (into #{})))))
+
+(defn merge-intervals [intervals]
+  (if (empty? intervals)
+    []
+    (let [sorted (sort-by first intervals)]
+      (reduce (fn [acc next-interval]
+                (let [last-interval (last acc)]
+                  (if last-interval
+                    (let [[last-start last-end] last-interval
+                          [next-start next-end] next-interval]
+                      (if (>= last-end next-start)
+                        (conj (pop acc) [last-start (max last-end next-end)])
+                        (conj acc next-interval)))
+                    (conj acc next-interval))))
+              [(first sorted)]
+              (rest sorted)))))
+
+(defn score-file [file keywords]
+  (if-not (.exists file)
+    0
+    (let [name (.getName file)
+          path (.getAbsolutePath file)
+          content (try (slurp file) (catch Exception _ ""))
+          content-lower (str/lower-case content)
+          hits (reduce (fn [acc kw]
+                         (+ acc (count (re-seq (re-pattern (str "\\b" kw "\\b")) content-lower))))
+                       0
+                       keywords)
+          symbols (cond
+                    (str/ends-with? name ".clj") (parse-clojure-symbols content)
+                    (str/ends-with? name ".py") (parse-python-symbols content)
+                    (or (str/ends-with? name ".js") (str/ends-with? name ".ts")) (parse-js-symbols content)
+                    :else [])
+          symbol-boost (reduce (fn [acc sym]
+                                 (if (contains? keywords (str/lower-case (:name sym)))
+                                   (+ acc 5)
+                                   acc))
+                               0
+                               symbols)
+          path-lower (str/lower-case path)
+          penalty (cond
+                    (or (str/includes? path-lower "test")
+                        (str/includes? path-lower "spec")
+                        (str/includes? path-lower "fixture"))
+                    -3
+                    
+                    (or (str/ends-with? path-lower ".md")
+                        (str/ends-with? path-lower ".txt")
+                        (str/ends-with? path-lower ".rst"))
+                    -2
+                    
+                    :else 0)]
+      (+ hits symbol-boost penalty))))
+
+(defn extract-context-snippets [file keywords]
+  (let [lines (str/split-lines (slurp file))
+        line-count (count lines)
+        match-indices (keep-indexed (fn [idx line]
+                                      (let [line-lower (str/lower-case line)]
+                                        (when (some #(str/includes? line-lower %) keywords)
+                                          (inc idx))))
+                                    lines)
+        windows (map (fn [idx]
+                       [(max 1 (- idx 2)) (min line-count (+ idx 2))])
+                     match-indices)
+        merged (take 5 (merge-intervals windows))]
+    (map (fn [[start end]]
+           {:start start
+            :end end
+            :lines (subvec (vec lines) (dec start) end)})
+         merged)))
+
+(defn find-symbol-callers [root symbols defining-files]
+  (let [files (list-project-files root)
+        defining-set (into #{} (map #(.getAbsolutePath %) defining-files))
+        callers (atom [])]
+    (doseq [f files
+            :when (not (contains? defining-set (.getAbsolutePath f)))]
+      (let [lines (str/split-lines (try (slurp f) (catch Exception _ "")))
+            name (.getName f)]
+        (doseq [[idx line] (map-indexed list lines)]
+          (doseq [sym symbols]
+            (when (and (str/includes? line sym)
+                       (not (str/includes? line (str "defn " sym)))
+                       (not (str/includes? line (str "def " sym)))
+                       (not (str/includes? line (str "class " sym))))
+              (swap! callers conj {:symbol sym
+                                   :file name
+                                   :line (inc idx)
+                                   :content (str/trim line)}))))))
+    (take 5 @callers)))
+
+(defn codedb-context-tool [system args]
+  (let [query (:query args)
+        root (or (:root-dir args) ".")
+        keywords (extract-query-keywords query)]
+    (if (empty? keywords)
+      {:result "No relevant keywords extracted from query."}
+      (let [files (list-project-files root)
+            scored (->> files
+                        (map (fn [f] {:file f :score (score-file f keywords)}))
+                        (filter #(> (:score %) 0))
+                        (sort-by :score >)
+                        (take 3))
+            top-files (map :file scored)
+            root-path (.getAbsolutePath (io/file root))
+            root-len (count root-path)
+            symbols-map (into {} (for [f top-files
+                                       :let [content (try (slurp f) (catch Exception _ ""))
+                                             name (.getName f)
+                                             syms (cond
+                                                    (str/ends-with? name ".clj") (parse-clojure-symbols content)
+                                                    (str/ends-with? name ".py") (parse-python-symbols content)
+                                                    (or (str/ends-with? name ".js") (str/ends-with? name ".ts")) (parse-js-symbols content)
+                                                    :else [])]]
+                                   [f syms]))
+            all-top-symbols (into #{} (map :name (apply concat (vals symbols-map))))
+            callers (find-symbol-callers root all-top-symbols top-files)
+            snippets (for [{:keys [file score]} scored
+                           :let [p (.getAbsolutePath file)
+                                 rel (subs p root-len)
+                                 clean-rel (if (or (str/starts-with? rel "/")
+                                                   (str/starts-with? rel "\\"))
+                                             (subs rel 1)
+                                             rel)
+                                 snips (extract-context-snippets file keywords)]]
+                       {:path clean-rel
+                        :score score
+                        :snippets snips})
+            md (with-out-str
+                 (println "# Fused CodeDB Context")
+                 (println)
+                 (println "## Extracted Keywords")
+                 (println (str/join ", " (sort keywords)))
+                 (println)
+                 (println "## Ranked Relevant Files & Snippets")
+                 (doseq [s snippets]
+                   (println (str "### File: `" (:path s) "` (Score: " (:score s) ")"))
+                   (if (empty? (:snippets s))
+                     (println "*(No matching code snippets found)*")
+                     (doseq [snip (:snippets s)]
+                       (println "```clojure")
+                       (doseq [[idx line] (map-indexed list (:lines snip))]
+                         (let [line-num (+ (:start snip) idx)]
+                           (println (str line-num ": " line))))
+                       (println "```")))
+                   (println))
+                 (println "## Reference Index / Caller Chains")
+                 (if (empty? callers)
+                   (println "*(No caller chains identified)*")
+                   (doseq [c callers]
+                     (println (str "- Usage of `" (:symbol c) "` in `" (:file c) "` at line " (:line c) ": `" (:content c) "`")))))]
+        {:result md}))))
+
 (defn generate-codebase-map [root]
   (let [root-file (io/file root)
         root-path (.getAbsolutePath root-file)
@@ -230,4 +393,12 @@
                                    :description "Workspace dependency relations."
                                    :parameters {:type "object"
                                                  :properties {:root-dir {:type "string" :description "Root directory path."}}
-                                                 :required []}}})))
+                                                 :required []}}})
+      (registry/register {:name "codedb_context"
+                          :handler codedb-context-tool
+                          :schema {:type "function"
+                                   :description "Fuses search, outline, symbol, and callers into a single ranked context response."
+                                   :parameters {:type "object"
+                                                 :properties {:query {:type "string" :description "The natural-language task query."}
+                                                              :root-dir {:type "string" :description "Root directory path."}}
+                                                 :required ["query"]}}})))
