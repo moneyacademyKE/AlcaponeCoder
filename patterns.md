@@ -270,3 +270,13 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 3. Capture terminal interrupt exceptions (`UserInterruptException`, `EndOfFileException`) to cleanly exit and trigger system shutdown hooks.
 **Benefit**: Provides an extremely fast, self-contained interactive feedback loop for developing, stepping-through, and testing the agent's reasoning.
 
+## Pattern 25: The In-Context RL (Taste) Pattern
+**Context**: Custom coding styles (idioms, naming patterns, anti-patterns) are highly project-specific. General pre-trained LLMs lack awareness of local "taste", leading to unidiomatic suggestions.
+**Solution**: Implement an asynchronous, in-context reinforcement learning loop using a local profile (`taste.json`) and prompt injection.
+**Implementation**:
+1. **Reward Formulation**: Evaluate execution outcome (symbolic reward) and style alignment (neural reward from auxiliary LLM).
+2. **Preference Learning**: Periodically or at session termination, run a background thread to extract style preferences based on the trajectory and update the local profile.
+3. **Constraint Injection**: Load the profile and append formatted preferences to the system prompt in the prompt compiler.
+**Benefit**: Dynamically guides LLM generation toward idiomatic local styling without the complexity of parameter fine-tuning.
+
+

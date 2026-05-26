@@ -1,6 +1,7 @@
 (ns prompt
   (:require [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [taste]))
 
 (defn read-file-truncated [path max-chars]
   (let [file (io/file path)]
@@ -51,6 +52,8 @@ You are operating within a restricted sandbox. Use your tools carefully. Always 
         knowledge (or (some-> (io/resource "KNOWLEDGE.md") slurp)
                       (some-> (io/file "KNOWLEDGE.md") slurp)
                       "No institutional knowledge available.")
+        taste-profile (taste/load-taste-profile)
+        taste-str (taste/format-taste-prompt taste-profile)
         parts (cond-> [soul]
                 (> depth 0) (conj (str "CURRENT DELEGATION DEPTH: " depth " (Be brief and focused on the sub-task)."))
                 :always (conj (str "# Current Plan & Status\n" plan-str))
@@ -58,6 +61,7 @@ You are operating within a restricted sandbox. Use your tools carefully. Always 
                 :always (conj "ENVIRONMENT CAPABILITIES:\nCommon binaries available: git, python3, gcc, g++, gdb, strace, valgrind, sqlite3, curl, wget, nginx, sshd, pdftotext, tesseract.")
                 memory (conj (str "# Memory\n" memory))
                 skills (conj (str "# Skills\n" skills))
+                :always (conj taste-str)
                 project-context (conj (str "# Project Context\n" project-context))
                 :always (conj (str "Current time: " (.format (java.time.LocalDateTime/now)
                                                               (java.time.format.DateTimeFormatter/ofPattern "yyyy-MM-dd HH:mm")))))]

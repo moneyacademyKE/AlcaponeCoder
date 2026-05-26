@@ -194,3 +194,9 @@
 - **Learning**: Babashka v1.12+ bundles JLine3 natively. We can build an interactive "Pilot Mode" developer loop using native JLine3 Java interop (`TerminalBuilder` and `LineReaderBuilder`). This enables rich terminal inputs, custom slash command autocompletions (via a reified `Completer`), and structured console outputs.
 - **Result**: Implemented `pilot.clj` with tab-completing commands (`/plan`, `/budget`, `/history`, `/reset`, `/exit`), vastly reducing development iteration and debugging latency.
 
+## 90. In-Context Neuro-Symbolic RL (Taste Feedback Loop)
+- **Observation**: Reinforcement learning from developer feedback is critical for code generation, but parameter-weight training (PPO/DPO) is too heavy and resource-intensive for lightweight runtime environments.
+- **Learning**: We can approximate the mathematical policy optimization objective using in-context prompt updates. By combining symbolic metrics (test execution, compiler success) with neural ratings (auxiliary LLM rating of idiomatic quality), we construct a robust reward model. Storing these outcomes as a JSON "taste profile" and injecting them dynamically as system prompt guidelines optimizes the policy prompt-space dynamically and asynchronously.
+- **Result**: Implemented the "Taste" feedback loop (`taste.clj`), allowing the agent to continuously adapt its naming, design, and testing preferences without model-tuning overhead.
+
+

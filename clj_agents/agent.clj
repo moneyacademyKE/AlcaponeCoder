@@ -14,7 +14,8 @@
             [llm]
             [store]
             [logger]
-            [cron])
+            [cron]
+            [taste])
   (:import [java.util.concurrent Executors]))
 
 (defn- spawn-background-review! [system messages review-memory review-skills]
@@ -27,6 +28,8 @@
       (when review-skills
         (println "[BG-REVIEW] Analyzing for new skills...")
         (reviewer/review-trajectory system messages))
+      (println "[BG-REVIEW] Analyzing trajectory for style and taste...")
+      (taste/update-taste-from-trajectory! system messages true)
       (println "[BG-REVIEW] Review completed.")
       (catch Exception e (println "BG Review failed:" (ex-message e))))))
 
