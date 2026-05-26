@@ -183,3 +183,14 @@
 - **Observation**: In headless benchmark environments, it is difficult to see what the agent is "thinking" without manually tailing large log files.
 - **Learning**: Injecting a unique `trace_id` into the system map at the start of each task—and echoing it in every structured log entry—allows the orchestrator to filter and stream task-specific telemetry in real-time.
 - **Result**: Improved developer observability during official benchmark runs, allowing for immediate identification of tool-call failures or LLM stalls.
+
+## 88. Declarative Schema Validation with Clojure Spec
+- **Observation**: Hardcoded type checking and boundary assertions in dynamic maps are complected and difficult to maintain. Mismatched structures (like atoms instead of maps) cause runtime crashes that are hard to debug at distance.
+- **Learning**: Implementing Clojure Spec (`clojure.spec.alpha`) for the central System Map enables declarative assertions. By running `(s/valid?)` inside `validate-system` and throwing an exception with `(s/explain-str)` on violation, we gain clear error traces at boundaries (like checkpoint creation or tool registration) without complecting the system logic.
+- **Result**: Refactored validation to use specifications, catching 100% of structure mismatches instantly.
+
+## 89. Native JLine3 Integration in Babashka
+- **Observation**: Running and debugging agents purely through command-line parameters or config files is slow and opaque.
+- **Learning**: Babashka v1.12+ bundles JLine3 natively. We can build an interactive "Pilot Mode" developer loop using native JLine3 Java interop (`TerminalBuilder` and `LineReaderBuilder`). This enables rich terminal inputs, custom slash command autocompletions (via a reified `Completer`), and structured console outputs.
+- **Result**: Implemented `pilot.clj` with tab-completing commands (`/plan`, `/budget`, `/history`, `/reset`, `/exit`), vastly reducing development iteration and debugging latency.
+

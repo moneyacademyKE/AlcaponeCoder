@@ -246,3 +246,27 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 2.  **Propagation**: The `logger/log!` function extracts `:trace_id` from the system map and includes it in both JSON and human-readable output.
 3.  **Consumption**: Real-time log monitors (like `run_official_benchmark.py`) can tail the log file and filter by the current task's `trace-id` to provide an isolated, high-signal stream of events.
 **Benefit**: Provides high-resolution observability without increasing system complexity. De-complects "Event Generation" from "Telemetry Visualization".
+
+## Pattern 23: The Spec Boundary Pattern
+**Context**: Dynamic maps in Clojure are highly flexible but lack structural constraints. Over time, structural key changes or partial migrations (e.g. atoms vs maps) can silently pollute the system map and fail far from the source.
+**Solution**: Use `clojure.spec.alpha` to declaratively validate key namespaces and map boundaries. Validate the system map at initialization (and checkpoint recovery) using a central spec.
+**Implementation**:
+1. Define specs for unqualified system keys (e.g. `(s/def ::budget number?)`).
+2. Construct a central system key map spec using `(s/keys :req-un [...])`.
+3. In `validate-system`, execute `(s/valid? ::system-map system)`. If invalid, throw an exception wrapping the complete trace using `(s/explain-str ::system-map system)`.
+**Benefit**: Moves structural errors from obscure runtime crashes to clear, instant type/shape assertions at system boundaries.
+
+## Pattern 24: JLine3 Terminal Pilot Control Loop
+**Context**: Opaque CLI flags and environment variables make local debugging and interactive testing of agent loops cumbersome.
+**Solution**: Leverage native JLine3 bindings in Babashka 1.12+ to construct a terminal-based interactive control panel (Pilot Mode).
+**Implementation**:
+1. Construct the terminal and line reader using interop:
+   ```clojure
+   (let [term (TerminalBuilder/terminal)
+         reader (LineReaderBuilder/lineReader term completer)]
+     (.readLine reader prompt))
+   ```
+2. Build autocomplete candidates dynamically by reifying `org.jline.reader.Completer` to intercept tab key events.
+3. Capture terminal interrupt exceptions (`UserInterruptException`, `EndOfFileException`) to cleanly exit and trigger system shutdown hooks.
+**Benefit**: Provides an extremely fast, self-contained interactive feedback loop for developing, stepping-through, and testing the agent's reasoning.
+
