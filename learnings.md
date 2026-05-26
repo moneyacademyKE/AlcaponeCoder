@@ -199,4 +199,10 @@
 - **Learning**: We can approximate the mathematical policy optimization objective using in-context prompt updates. By combining symbolic metrics (test execution, compiler success) with neural ratings (auxiliary LLM rating of idiomatic quality), we construct a robust reward model. Storing these outcomes as a JSON "taste profile" and injecting them dynamically as system prompt guidelines optimizes the policy prompt-space dynamically and asynchronously.
 - **Result**: Implemented the "Taste" feedback loop (`taste.clj`), allowing the agent to continuously adapt its naming, design, and testing preferences without model-tuning overhead.
 
+## 91. Native Code Intelligence (Embedding CodeDB)
+- **Observation**: External MCP code-intelligence servers (like `codedb`) provide useful token compression tools (`codedb_tree`, `codedb_outline`, `codedb_search`), but are complex to configure and run reliably inside isolated sandbox containers due to external system dependencies (Go, Node, IPC).
+- **Learning**: We can natively build equivalents of these tools inside the harness's execution process using pure Clojure/Babashka logic. By using Java's built-in file walkers, simple regex-based symbol parsers for target languages, and in-memory grep structures, we achieve identical functionality with zero external dependencies and <1ms startup latency.
+- **Result**: Implemented the native CodeDB module (`codedb.clj`), exposing `codedb_tree`, `codedb_outline`, `codedb_search`, and `codedb_deps` to the agent, reducing setup turn costs to zero.
+
+
 

@@ -279,4 +279,15 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 3. **Constraint Injection**: Load the profile and append formatted preferences to the system prompt in the prompt compiler.
 **Benefit**: Dynamically guides LLM generation toward idiomatic local styling without the complexity of parameter fine-tuning.
 
+## Pattern 26: The Native CodeDB Pattern
+**Context**: Code intelligence tools (file trees, outline builders, grep-search engines) are essential for high-performance agent operations, but standard external MCP servers introduce IPC boundaries and configuration overhead.
+**Solution**: Natively embed tree representation, symbol parsing, and file search tools directly into the agent's runtime process using standard Clojure logic.
+**Implementation**:
+1. **Recursive File Walkers**: Construct file sequences with custom filter sets (splitting paths by directory separators and checking against a set of ignored patterns).
+2. **Regex Symbol Parsing**: Build simple, fast, multi-language parsers using regular expressions to outline classes, methods, and functions.
+3. **Internal Grep/Search**: Grep content within the process to filter results before compiling tool responses.
+4. **Registry Binding**: Bind the tools directly into the System Map registry during startup.
+**Benefit**: Offers extremely high execution speeds, zero configuration overhead, and 100% compatibility in isolated sandbox environments.
+
+
 

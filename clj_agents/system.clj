@@ -14,6 +14,7 @@
             [tools.patch]
             [tools.multimedia]
             [tools.xml]
+            [codedb]
             [store]))
 
 (s/def ::id string?)
@@ -72,6 +73,7 @@
         (tools.patch/register-tools)
         (tools.multimedia/register-tools)
         (tools.xml/register-tools)
+        (codedb/register-tools)
         (validate-system)
         (as-> sys
           (do (.addShutdownHook (Runtime/getRuntime) 
