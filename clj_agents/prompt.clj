@@ -1,7 +1,8 @@
 (ns prompt
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [taste]))
+            [taste]
+            [codedb]))
 
 (defn read-file-truncated [path max-chars]
   (let [file (io/file path)]
@@ -54,10 +55,12 @@ You are operating within a restricted sandbox. Use your tools carefully. Always 
                       "No institutional knowledge available.")
         taste-profile (taste/load-taste-profile)
         taste-str (taste/format-taste-prompt taste-profile)
+        codebase-map (codedb/generate-codebase-map ".")
         parts (cond-> [soul]
                 (> depth 0) (conj (str "CURRENT DELEGATION DEPTH: " depth " (Be brief and focused on the sub-task)."))
                 :always (conj (str "# Current Plan & Status\n" plan-str))
                 :always (conj (str "# Institutional Knowledge (Operational Patterns)\n" knowledge))
+                :always (conj codebase-map)
                 :always (conj "ENVIRONMENT CAPABILITIES:\nCommon binaries available: git, python3, gcc, g++, gdb, strace, valgrind, sqlite3, curl, wget, nginx, sshd, pdftotext, tesseract.")
                 memory (conj (str "# Memory\n" memory))
                 skills (conj (str "# Skills\n" skills))

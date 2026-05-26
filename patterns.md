@@ -289,5 +289,26 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 4. **Registry Binding**: Bind the tools directly into the System Map registry during startup.
 **Benefit**: Offers extremely high execution speeds, zero configuration overhead, and 100% compatibility in isolated sandbox environments.
 
+## Pattern 27: The Pre-Injected Codebase Map Pattern
+**Context**: Agents waste critical reasoning turns performing initial workspace exploration (`find .`, `tree`, `codedb_tree`) to orient themselves before executing task actions.
+**Solution**: Automatically compile and prepend a hash-stable codebase directory layout map directly to the system prompt at initialization.
+**Implementation**:
+1. **Sorted Relative Paths**: Scan workspace files using list filters and generate sorted relative path list:
+   ```clojure
+   (map #(str/replace (.getPath %) root-path "") files)
+   ```
+2. **System Prompt Injection**: Compile this list into a `# Codebase Map` block and append it as a mandatory segment in `prompt/build-system-prompt`.
+**Benefit**: Eliminates Turn-0 discovery tool calls, providing full workspace structural awareness on the agent's first turn.
+
+## Pattern 28: The Gap-Driven Code Intelligence Extension Pattern
+**Context**: Basic processes running inside containerized sandboxes need rich file metadata and active git status context to make informed edit/read decisions, but full IDE servers are unavailable.
+**Solution**: Enhance the native code database with size metadata and git/file-modification trackers directly through lightweight shell/system calls.
+**Implementation**:
+1. **Size-Annotated File Tree**: Return structured maps of file paths and sizes instead of plain lists, allowing the agent to evaluate code size/token cost before reading.
+2. **Git Status & Recency tracking**: Query git status using porcelain outputs and fallback to filesystem modification timestamps (`lastModified`) to compile a list of active files.
+**Benefit**: Speeds up targeted debugging by helping the agent locate modified and high-complexity files instantly.
+
+
+
 
 
