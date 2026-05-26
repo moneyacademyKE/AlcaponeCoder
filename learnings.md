@@ -229,9 +229,54 @@
 - **Learning**: Tests checking configuration loading, merging, and backward compatibility must assert against the current active default configuration rather than legacy hardcoded strings. Keeping configuration documentation in sync prevents developer confusion and mismatched environments.
 - **Result**: Updated `tests/config_test.clj` and `docs/en/s11-configuration-system.md` to cleanly align with `deepseek/deepseek-v4-flash:free`, passing the full suite with zero regressions.
 
+## 97. Docker Container API Key Propagation Anti-Pattern (CRITICAL)
+- **Observation**: `hermes_bb.py` adapter read API keys from `os.environ` (the Harbor host environment), but the keys were stored in `~/.hermes/.env` as `OPENAI_API_KEY` containing an `sk-or-` prefixed OpenRouter key. The Harbor host process never loaded `.env`, so neither `OPENROUTER_API_KEY` nor `OPENAI_API_KEY` was present in `os.environ`. Furthermore, the `config.yaml` written into the container used a shell variable placeholder (`api-key: ${OPENROUTER_API_KEY}`) inside a heredoc — which Babashka cannot expand because it's not a shell, it's a JVM process. Result: every benchmark task failed with `401 Unauthorized`.
+- **Learning**: Three layers must all agree for API key delivery to work in containerized agent environments:
+  1. **Host-level resolution**: Load `.env` files explicitly (don't assume shell env is populated)
+  2. **Adapter injection**: Embed the **literal** resolved key value in config files, never shell variable placeholders
+  3. **Provider aliasing**: Detect OpenRouter keys stored under `OPENAI_API_KEY` by checking the `sk-or-` prefix
+- **Pattern** (Rich Hickey: make implicit things explicit):
+  ```python
+  def _resolve_api_key():
+      hermes_env = _load_hermes_env()  # explicit .env read
+      merged = {**hermes_env, **{k: v for k, v in os.environ.items() if v}}
+      openrouter_key = merged.get("OPENROUTER_API_KEY")
+      openai_key = merged.get("OPENAI_API_KEY")
+      if not openrouter_key and openai_key and openai_key.startswith("sk-or-"):
+          openrouter_key = openai_key  # alias detection
+      return openrouter_key, openai_key
+  # Then embed literal value in config, NOT placeholder:
+  config["api-key"] = openrouter_key or openai_key  # not "${OPENROUTER_API_KEY}"
+  ```
+- **Result**: 100% of auth failures resolved. First properly-authenticated task scored `# OK`.
 
+## 98. AgentSetupTimeoutError — apt-get Deadlock in Docker (CRITICAL)
+- **Observation**: The `hermes_bb.py` install phase ran `apt-get update && apt-get install -y curl git ripgrep xz-utils` unconditionally. Many Terminal-Bench task images already have these tools, making `apt-get update` (which fetches package lists from all mirrors) take 5-8 minutes. The default Harbor `_AGENT_SETUP_TIMEOUT_SEC = 360` (6 minutes) is not enough.
+- **Learning**: Never run `apt-get update` unconditionally in container install hooks. Always check if tools already exist first with `command -v`. For tasks that genuinely need apt-get, increase the timeout multiplier via `--agent-setup-timeout-multiplier`. The correct pattern:
+  ```bash
+  command -v curl git xz >/dev/null 2>&1 && echo HAVE_TOOLS || \
+    (DEBIAN_FRONTEND=noninteractive apt-get update -qq && \
+     apt-get install -y -qq --no-install-recommends curl git ripgrep xz-utils)
+  ```
+- **Optimization wins**: Merging `mkdir` + `uname -m` into one exec reduces container round-trips from 6 to 4.
+- **Timeout**: Pass `--agent-setup-timeout-multiplier 3` (18min cap) as safety net for heavy images.
+- **Result**: Setup time reduced from >6min (timeout) to ~30-90 seconds for most task images.
 
-
-
-
+## 99. Free-Tier Model Availability Scanning (Operational Learning)
+- **Observation**: `deepseek/deepseek-v4-flash:free` was the configured default but was returning `429 Provider returned error` (upstream rate-limited at Crucible provider) for all calls, causing every task to immediately fail with an auth/availability error on the first LLM call.
+- **Learning**: Before starting a multi-hour benchmark run, always scan available free models with a quick API test loop. Models that are "free" on OpenRouter are individually hosted by providers and can be withdrawn or rate-limited at any time. Keep a ranked list of working fallbacks:
+  ```
+  Tier-1 (large, strong):  openai/gpt-oss-120b:free, nvidia/nemotron-3-super-120b-a12b:free
+  Tier-2 (medium, reliable): openai/gpt-oss-20b:free, poolside/laguna-m.1:free
+  Tier-3 (small, fast):    nvidia/nemotron-nano-9b-v2:free
+  ```
+- **Pre-flight script**:
+  ```bash
+  for model in "openai/gpt-oss-120b:free" "poolside/laguna-m.1:free"; do
+    result=$(curl -s -X POST .../chat/completions -H "Authorization: Bearer $KEY" \
+      -d "{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"OK\"}],\"max_tokens\":5}")
+    echo "$model: $(echo $result | grep -q content && echo OK || echo FAIL)"
+  done
+  ```
+- **Result**: Switched to `openai/gpt-oss-120b:free` (verified alive), benchmark running cleanly.
 
