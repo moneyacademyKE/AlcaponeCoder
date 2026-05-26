@@ -23,6 +23,7 @@ This is not a tutorial repo. It is a **working agent system** that:
 
 ```text
 harbor.clj          ← Entry point. Terminal guard. Always exits 0.
+pilot.clj           ← Interactive control panel (JLine3 TUI dashboard).
   └─ system.clj     ← System map creation. Threads all tool registrations.
        └─ agent.clj ← Core loop: LLM call → tool dispatch → recur
             ├─ llm.clj          Primary / fallback / auxiliary model tiers
@@ -30,8 +31,10 @@ harbor.clj          ← Entry point. Terminal guard. Always exits 0.
             ├─ compression.clj  Proactive context compaction at 25k chars
             ├─ recovery.clj     Error classification + jittered backoff
             ├─ memory.clj       ~/.hermes/MEMORY.md + USER.md persistence
-            ├─ prompt.clj       System prompt assembly (SOUL.md, plan, memory, skills)
+            ├─ prompt.clj       System prompt assembly (SOUL.md, plan, memory, skills, taste)
             ├─ skill.clj        Skill index + create/edit/delete
+            ├─ taste.clj        In-context RL taste feedback loop
+            ├─ codedb.clj       Native CodeDB code intelligence tools
             ├─ store.clj        Session persistence (state.json)
             ├─ logger.clj       Structured JSON logging → ~/.hermes/hermes.log
             ├─ permissions.clj  Dangerous command detection + headless bypass
@@ -45,7 +48,7 @@ harbor.clj          ← Entry point. Terminal guard. Always exits 0.
                  └─ system_tools.clj  set_plan roadmap tool
 ```
 
-**13 tools registered on startup.** All registration is pure — no global atoms.
+**17 tools registered on startup.** All registration is pure — no global atoms.
 
 ---
 
@@ -206,6 +209,10 @@ The agent reads `HARBOR_INSTRUCTION` and `HARBOR_MODEL` environment variables in
 | Memory consolidation | ✅ Active | Every 20 turns checkpoint |
 | Parallel tool dispatch | ✅ Active | `pmap` + locking |
 | Harbor exit 0 guarantee | ✅ Active | `(System/exit 0)` all paths |
+| Declarative Spec Validation | ✅ Active | `clojure.spec.alpha` on system map |
+| JLine3 Developer Console | ✅ Active | Tab-completions, interactive REPL |
+| Taste Feedback Loop | ✅ Active | Asynchronous style constraint extraction |
+| CodeDB Code Intelligence | ✅ Active | Native workspace explorer and symbol parser |
 
 ---
 
@@ -213,5 +220,6 @@ The agent reads `HARBOR_INSTRUCTION` and `HARBOR_MODEL` environment variables in
 
 All production discoveries are documented:
 
-- [`learnings.md`](./learnings.md) — 79 numbered learnings from real benchmark runs
-- [`patterns.md`](./patterns.md) — 16 reusable architectural patterns with code examples
+- [`learnings.md`](./learnings.md) — 91 numbered learnings from real benchmark runs
+- [`patterns.md`](./patterns.md) — 26 reusable architectural patterns with code examples
+

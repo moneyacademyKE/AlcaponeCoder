@@ -23,7 +23,8 @@
 | File | Responsibility |
 |------|---------------|
 | `harbor.clj` | Entry point. Reads `HARBOR_INSTRUCTION`, creates system, calls `run-conversation`, prints JSON result, always exits 0. |
-| `system.clj` | `create-system`: creates the base system map and threads it through all `register-tools` calls. |
+| `pilot.clj` | Interactive control panel (JLine3 TUI dashboard) for user debugging and step-through loops. |
+| `system.clj` | `create-system`: creates the base system map, registers tools, and hooks the JVM shutdown thread. |
 | `agent.clj` | The main `loop/recur` agent loop. Manages turns, budget, compaction triggers, pmap dispatch. |
 | `registry.clj` | Pure map tool registry. `(register system tool-def)` → enriched system. `(dispatch system name args)` → result string. |
 | `llm.clj` | LLM API calls. Primary → Fallback model switching on 401/402/404. Auxiliary tier for background tasks. |
@@ -33,9 +34,11 @@
 |------|---------------|
 | `memory.clj` | Read/write `~/.hermes/MEMORY.md` + `USER.md`. `register-tools` adds `memory` tool. Consolidation every 20 turns. |
 | `skill.clj` | Skill index from `~/.hermes/skills/`. `register-tools` adds `skill_view` + `skill_manage`. |
+| `taste.clj` | In-context reinforcement learning feedback loop storing style choices to `taste.json`. |
+| `codedb.clj` | Native code intelligence registry exposing outline parsing, folder trees, and workspace search. |
 | `compression.clj` | Context compaction. Triggered at `threshold_chars` (default 25k). 3-layer: prune → find boundaries → LLM summarize. |
 | `reviewer.clj` | Background skill extraction. Runs in separate thread after N turns. |
-| `prompt.clj` | System prompt assembly: SOUL.md + plan + institutional knowledge + memory + skills + project context. |
+| `prompt.clj` | System prompt assembly: SOUL.md + plan + institutional knowledge + memory + skills + project context + taste. |
 | `permissions.clj` | Dangerous command detection. Bypassed in HEADLESS mode (benchmark environments). |
 | `recovery.clj` | API error classification + jittered exponential backoff. |
 
@@ -70,7 +73,7 @@
  :env            <backend-env>        ; execution environment handle
  :registry       {"terminal" {...}    ; tool registry (plain map, NOT atom)
                   "memory"   {...}
-                  ...}                ; 13 tools total after create-system
+                  ...}                ; 17 tools total after create-system
  :hooks          {}                   ; lifecycle hooks (plain map)
  :approvals      {}                   ; user permissions (plain map)
  :cron-jobs      {}                   ; background jobs (plain map)
@@ -81,7 +84,7 @@
  :browser-process (atom nil)}        ; OS process handle (atom OK for external IO)
 ```
 
-**Key invariant**: The system map is purely immutable data (following Rich Hickey's "Simple Made Easy" principles). Tools cannot mutate the system using `swap!` or `reset!`. Instead, if a tool needs to change the system state, it returns an explicit payload: `{:result string :system-update (fn [sys] ...)}`. The `agent.clj` loop handles concurrency by running tools via `pmap` and then sequentially reducing their update functions into the next epoch's system map.
+**Key invariant**: The system map is purely immutable data (following Rich Hickey's "Simple Made Easy" principles). The shape of this system map is verified declaratively at runtime boundaries using `clojure.spec.alpha`. Tools cannot mutate the system using `swap!` or `reset!`. Instead, if a tool needs to change the system state, it returns an explicit payload: `{:result string :system-update (fn [sys] ...)}`. The `agent.clj` loop handles concurrency by running tools via `pmap` and then sequentially reducing their update functions into the next system map.
 
 ---
 
@@ -111,7 +114,9 @@ Every tool module MUST follow this pattern exactly:
     (tools.browser/register-tools)   ; adds 4 browser tools
     (tools.system-tools/register-tools) ; adds "set_plan"
     (tools.patch/register-tools)     ; adds "patch"
-    (tools.multimedia/register-tools)) ; adds "vision_analyze", "text_to_speech"
+    (tools.multimedia/register-tools) ; adds "vision_analyze", "text_to_speech"
+    (tools.xml/register-tools)       ; adds "xml_tool"
+    (codedb/register-tools))         ; adds 4 codedb tools
 ```
 
 **Do not** add `(register-tools! system)` calls that discard the return value. The return value IS the enriched system.
@@ -166,21 +171,12 @@ The agent loop NEVER calls `(System/exit)` directly. Only `harbor.clj` exits the
 
 ## Testing
 
+To run the complete test suite (now covering spec validation, taste rewards, and CodeDB tool indexing):
+
 ```sh
 # Run all tests
-cd xharness && bb --classpath clj_agents -e "
-(require '[clojure.test :as t])
-(load-file \"tests/agent_error_test.clj\")  ; error recovery cases
-(load-file \"tests/agent_test.clj\")        ; core loop logic
-(load-file \"tests/registry_test.clj\")     ; tool registration/dispatch
-(load-file \"tests/s02_test.clj\")          ; system map registry API
-(load-file \"tests/s04_test.clj\")          ; prompt builder
-(load-file \"tests/s05_test.clj\")          ; compression layers
-(load-file \"tests/s06_test.clj\")          ; error recovery classification
-(t/run-tests 'agent-error-test 'agent-test 'registry-test
-             's02-test 's04-test 's05-test 's06-test)
-"
-# Target: 8 tests, 42 assertions, 0 failures, 0 errors
+bb test
+# Target: 12 tests, 42 assertions, 0 failures, 0 errors
 ```
 
 ---
