@@ -219,6 +219,12 @@
 - **Learning**: We can compile search query keywords, symbol definitions, file scoring heuristics, and caller tracking into a unified "context composer" tool. By performing stopword-filtered keyword extraction, scoring files (+5 definitions, -3 tests, -2 docs), merging overlapping context windows (±2 lines), and resolving reference locations project-wide, we provide a rich, single-turn context block.
 - **Result**: Implemented the native `codedb_context` tool in `codedb.clj`, cutting context-gathering tool call counts by up to 75% on discovery tasks.
 
+## 95. 5-Point Evaluation Rubric & Pareto Optimization
+- **Observation**: Evaluating agents using binary pass/fail or simple correctness scores fails to capture the trade-offs of structural code modifications (e.g. context tools might increase tokens but reduce time and improve snippet faithfulness).
+- **Learning**: We can compile multi-objective benchmark reports by implementing a 5-point evaluation rubric (File Correct, Function Correct, Snippet Faithful, Explanation Accurate, Completeness) graded via LLM-as-judge, and calculating Pareto frontiers across three axes: quality, speed, and token count. This ensures changes are only deployed if they are Pareto-dominant (nothing beats them on all three dimensions).
+- **Result**: Implemented the `evaluator.clj` module with rubric scoring and a Pareto frontier solver, and verified the functionality with unit tests.
+
+
 
 
 

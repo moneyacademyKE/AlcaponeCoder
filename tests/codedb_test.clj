@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [codedb]
             [prompt]
+            [evaluator]
             [clojure.java.io :as io]
             [cheshire.core :as json]))
 
@@ -132,6 +133,36 @@
       (is (clojure.string/includes? result-str "calculate"))
       (is (clojure.string/includes? result-str "a.clj"))
       (is (not (clojure.string/includes? result-str "### File: `a_test.clj`"))))))
+
+(deftest test-beats
+  (testing "beats? identifies strict Pareto dominance"
+    (is (evaluator/beats? {:quality 5 :speed 100 :tokens 50} {:quality 4 :speed 100 :tokens 50}))
+    (is (evaluator/beats? {:quality 5 :speed 90 :tokens 50} {:quality 5 :speed 100 :tokens 50}))
+    (is (not (evaluator/beats? {:quality 5 :speed 110 :tokens 50} {:quality 5 :speed 100 :tokens 50})))
+    (is (not (evaluator/beats? {:quality 4 :speed 90 :tokens 50} {:quality 5 :speed 100 :tokens 50})))))
+
+(deftest test-pareto-optimal
+  (testing "pareto-optimal? calculates Pareto frontier correctly"
+    (let [runs [{:quality 5 :speed 100 :tokens 50}
+                {:quality 4 :speed 80 :tokens 40}
+                {:quality 4 :speed 90 :tokens 45}
+                {:quality 3 :speed 120 :tokens 60}]]
+      (is (evaluator/pareto-optimal? {:quality 5 :speed 100 :tokens 50} runs))
+      (is (evaluator/pareto-optimal? {:quality 4 :speed 80 :tokens 40} runs))
+      (is (not (evaluator/pareto-optimal? {:quality 4 :speed 90 :tokens 45} runs))))))
+
+(deftest test-parse-rubric-response
+  (testing "Parses LLM judge response containing rubric scores"
+    (let [response "FILE CORRECT: 5\nFUNCTION CORRECT: 4\nSNIPPET FAITHFUL: 5\nEXPLANATION ACCURATE: 3\nCOMPLETENESS: 4\nFEEDBACK: overall good."
+          scores (evaluator/parse-rubric-response response)]
+      (is (= {:file-correct 5
+              :function-correct 4
+              :snippet-faithful 5
+              :explanation-accurate 3
+              :completeness 4
+              :feedback "overall good."}
+             scores)))))
+
 
 
 

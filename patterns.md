@@ -318,6 +318,16 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 4. **Usage Reference Indexing**: Search for calls to defined symbols in non-defining files.
 **Benefit**: Reduces reasoning loop turns, lowers overall token consumption, and consolidates workspace discovery into a single tool invocation.
 
+## Pattern 30: The Multi-Objective Pareto Dominance Pattern
+**Context**: Custom prompt/tool optimizations often trade off latency or token usage for quality. A single-objective metric cannot reliably guide whether a design is strictly superior.
+**Solution**: Track and optimize candidate runs across multiple axes (Quality, Latency/Speed, Token count) and solve for the Pareto frontier, categorizing suboptimal runs as "dominated."
+**Implementation**:
+1. **Analytic Rubrics**: Grade final outputs using a 5-point LLM-as-judge rubric to extract quality metrics on specific task features.
+2. **Dominance Checking**: Define a dominance relation where candidate A beats B if `quality(A) >= quality(B)`, `speed(A) <= speed(B)`, `tokens(A) <= tokens(B)`, and A is strictly better in at least one metric.
+3. **Frontier Extraction**: Filter out dominated configurations from the run history to keep only Pareto-optimal designs.
+**Benefit**: Prevents over-optimizing one metric (e.g. prompt pruning that degrades quality, or quality boosting that exceeds token limit).
+
+
 
 
 
