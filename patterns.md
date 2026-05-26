@@ -325,7 +325,12 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 1. **Analytic Rubrics**: Grade final outputs using a 5-point LLM-as-judge rubric to extract quality metrics on specific task features.
 2. **Dominance Checking**: Define a dominance relation where candidate A beats B if `quality(A) >= quality(B)`, `speed(A) <= speed(B)`, `tokens(A) <= tokens(B)`, and A is strictly better in at least one metric.
 3. **Frontier Extraction**: Filter out dominated configurations from the run history to keep only Pareto-optimal designs.
-**Benefit**: Prevents over-optimizing one metric (e.g. prompt pruning that degrades quality, or quality boosting that exceeds token limit).
+**Benefit**: Prevents over-optimizing one metric (e.g., prompt pruning that degrades quality, or quality boosting that exceeds token limit).
+
+## Pattern 31: The Synchronized Default Config Assert Pattern
+**Context**: Updating defaults in an agent harness often leaves test suites and system documentation lagging behind, causing drift errors where tests fail on fresh builds due to hardcoded legacy config values.
+**Solution**: Always couple configuration defaults updates with synchronized changes to documentation and tests. Avoid hardcoding specific default strings in core test assertions where possible, or update them in a single PR/commit following a strict verification step.
+**Benefit**: Ensures 100% test passing and accurate configuration documentation across model transitions.
 
 
 

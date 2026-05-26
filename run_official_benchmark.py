@@ -125,7 +125,7 @@ def ping_model(model_id):
 def main():
     parser = argparse.ArgumentParser(description="Enhanced Harbor benchmark runner with dashboard.")
     parser.add_argument("--delay", type=int, default=10, help="Delay in seconds between tasks.")
-    parser.add_argument("--model", type=str, default="tencent/hy3-preview:free", help="Model to use.")
+    parser.add_argument("--model", type=str, default="deepseek/deepseek-v4-flash:free", help="Model to use.")
     parser.add_argument("--agent", type=str, default="hermes-bb", help="Agent adapter.")
     parser.add_argument("--skip-ping", action="store_true", help="Skip initial model ping.")
     

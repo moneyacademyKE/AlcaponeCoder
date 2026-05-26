@@ -17,6 +17,6 @@
       
       (is (= "gemini-2.5-flash" (get-in merged [:models :primary])))
       (is (= "claude-3-opus" (get-in merged [:models :fallback])))
-      (is (= "inclusionai/ling-2.6-1t:free" (get-in merged [:models :auxiliary])))
+      (is (= "deepseek/deepseek-v4-flash:free" (get-in merged [:models :auxiliary])))
       (is (nil? (:model merged)))
       (is (nil? (:fallback-model merged))))))

@@ -224,6 +224,11 @@
 - **Learning**: We can compile multi-objective benchmark reports by implementing a 5-point evaluation rubric (File Correct, Function Correct, Snippet Faithful, Explanation Accurate, Completeness) graded via LLM-as-judge, and calculating Pareto frontiers across three axes: quality, speed, and token count. This ensures changes are only deployed if they are Pareto-dominant (nothing beats them on all three dimensions).
 - **Result**: Implemented the `evaluator.clj` module with rubric scoring and a Pareto frontier solver, and verified the functionality with unit tests.
 
+## 96. Model Shifting & Configuration Defaults Alignment
+- **Observation**: Shifting the default primary, fallback, and auxiliary models in configuration defaults (e.g., from `hy3` to `deepseek/deepseek-v4-flash:free`) can break legacy backward-compatibility test assertions if the tests hardcode outdated defaults (like expecting auxiliary models to be `inclusionai/ling-2.6-1t:free`).
+- **Learning**: Tests checking configuration loading, merging, and backward compatibility must assert against the current active default configuration rather than legacy hardcoded strings. Keeping configuration documentation in sync prevents developer confusion and mismatched environments.
+- **Result**: Updated `tests/config_test.clj` and `docs/en/s11-configuration-system.md` to cleanly align with `deepseek/deepseek-v4-flash:free`, passing the full suite with zero regressions.
+
 
 
 
