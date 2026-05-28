@@ -3,10 +3,22 @@
             [permissions]
             [logger]))
 
-(defn register [system {:keys [name] :as tool-entry}]
-  (let [new-system (update system :registry (fnil assoc {}) name tool-entry)]
+(defn normalize-schema [name schema]
+  (if (map? schema)
+    (if-not (contains? schema :function)
+      {:type (or (:type schema) "function")
+       :function {:name name
+                  :description (:description schema "")
+                  :parameters (:parameters schema {:type "object" :properties {}})}}
+      (update schema :function (fn [func] (assoc func :name (or (:name func) name)))))
+    schema))
+
+(defn register [system {:keys [name schema] :as tool-entry}]
+  (let [normalized-schema (normalize-schema name schema)
+        normalized-entry (assoc tool-entry :schema normalized-schema)
+        new-system (update system :registry (fnil assoc {}) name normalized-entry)]
     (logger/info new-system "tool_registered" {:name name})
-    new-system) )
+    new-system))
 
 (defn register! [system tool-entry]
   ;; Legacy alias — now delegates to pure register
@@ -21,6 +33,7 @@
                    (and (if allowed-tools (contains? allowed-tools (:name tool)) true)
                         (if (:check_fn tool) ((:check_fn tool) system) true))))
          (map :schema))))
+
 
 (defn dispatch [system name arguments]
   (let [data (get system :registry {})

@@ -332,6 +332,37 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 **Solution**: Always couple configuration defaults updates with synchronized changes to documentation and tests. Avoid hardcoding specific default strings in core test assertions where possible, or update them in a single PR/commit following a strict verification step.
 **Benefit**: Ensures 100% test passing and accurate configuration documentation across model transitions.
 
+## Pattern 32: Line-Oriented Command Wrapping (Heredoc Safe)
+**Context**: Appending status capture suffixes (`_exit=$?; export -p ...`) to execution scripts using semicolons breaks multi-line here-documents (heredocs) or trailing comments, as they consume the suffix as part of their body.
+**Solution**: Wrap commands inside newline delimiters rather than semicolon statement separators.
+```clojure
+(defn wrap-command [env-id command]
+  (format "source %s; ...\n%s\n_exit=$?; export -p ...; exit $_exit" snap-path command))
+```
+**Benefit**: Inherently protects line-oriented shell constructs (like heredocs or comment blocks) without needing to parse the command string.
+
+## Pattern 33: On-Registration Schema Normalization
+**Context**: Deferring tool schema wrapping and formatting to request-generation time is complected and prone to key-mapping drift between tool registration names and nested function names.
+**Solution**: Standardize and validate all schemas at registration time inside `registry/register` rather than dynamically.
+```clojure
+(defn register [system tool]
+  (let [normalized-schema (normalize-schema (:schema tool))]
+    (assert (valid-schema? normalized-schema))
+    (assoc-in system [:registry (:name tool)] (assoc tool :schema normalized-schema))))
+```
+**Benefit**: Fail-fast validation that ensures all registered tools are stored in a consistent format, decoupling registration from LLM payload generation.
+
+## Pattern 34: Paid Model API Sinks for High-Turn Benchmark Stability
+**Context**: Free tier models are heavily throttled and prone to sudden upstream provider rate-limits, which lead to benchmark timeouts.
+**Solution**: Use highly cost-effective paid APIs (e.g. paid DeepSeek Flash) for primary task loops and paid fallbacks (e.g. Qwen 2.5 Coder paid) to avoid daily free-tier quotas and Venice provider limits entirely.
+**Benefit**: Guarantees uninterrupted, high-speed task execution for fractions of a cent per run.
+
+## Pattern 35: Global IPv4 Fallback for Sandboxed Environments
+**Context**: Docker bridge networks under Rosetta translation on macOS hosts often have broken IPv6 route definitions, causing containerized package managers (`apt-get update`) to hang.
+**Solution**: Inject `Acquire::ForceIPv4 "true";` into the container's `/etc/apt/apt.conf.d/99force-ipv4` immediately at setup time.
+**Benefit**: Prevents container network hangs across all subsequent setup and verification tasks.
+
+
 
 
 

@@ -44,7 +44,26 @@
                                  :timeout 180000
                                  :throw false})]
         (if (= 200 (:status response))
-          {:status :ok :data (json/parse-string (:body response) true)}
+          (let [data (json/parse-string (:body response) true)]
+            (cond
+              (:error data)
+              (let [err-msg (str "API error inside 200 response: " (:error data)
+                                 " (Model: " model-id ", URL: " (:base-url config) ")")
+                    err-code (get-in data [:error :code])
+                    numeric-code (cond
+                                   (number? err-code) err-code
+                                   (= "rate_limit" err-code) 429
+                                   (and (string? err-code) (re-matches #"\d+" err-code)) (Integer/parseInt err-code)
+                                   :else 500)]
+                {:status :error :code numeric-code :message err-msg})
+              
+              (empty? (:choices data))
+              (let [err-msg (str "API error inside 200 response: No choices returned"
+                                 " (Model: " model-id ", URL: " (:base-url config) ")")]
+                {:status :error :code 500 :message err-msg})
+              
+              :else
+              {:status :ok :data data}))
           (let [err-msg (str "API error: " (:status response) " - " (:body response) 
                              " (Model: " model-id ", URL: " (:base-url config) ")")]
             {:status :error :code (:status response) :message err-msg})))
@@ -58,7 +77,8 @@
   "High-level caller with exponential backoff for 429 and 5xx errors."
   [system messages system-prompt model-key]
   (let [model-id (get-model-id system model-key)
-        retry-limit (get-in system [:config :agent :retry_limit] 10)]
+        config-limit (get-in system [:config :agent :retry_limit] 3)
+        retry-limit (if (= model-key :primary) (min 3 config-limit) config-limit)]
     (loop [attempt 1
            delay 1000]
       (let [_ (logger/info system :llm_call {:model model-id :role model-key :attempt attempt})

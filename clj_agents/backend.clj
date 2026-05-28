@@ -10,7 +10,7 @@
 (defn wrap-command [env-id command]
   (let [snap-path (format "/tmp/hermes-snap-%s.sh" env-id)
         cwd-path (format "/tmp/hermes-cwd-%s.txt" env-id)]
-    (format "source %s 2>/dev/null; [ -f %s ] && cd $(cat %s) 2>/dev/null; %s; _exit=$?; export -p > %s 2>/dev/null; pwd -P > %s 2>/dev/null; exit $_exit"
+    (format "source %s 2>/dev/null; [ -f %s ] && cd $(cat %s) 2>/dev/null;\n%s\n_exit=$?; export -p > %s 2>/dev/null; pwd -P > %s 2>/dev/null; exit $_exit"
             snap-path cwd-path cwd-path command snap-path cwd-path)))
 
 (defrecord LocalEnvironment [id]

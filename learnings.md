@@ -280,3 +280,20 @@
   ```
 - **Result**: Switched to `openai/gpt-oss-120b:free` (verified alive), benchmark running cleanly.
 
+## 100. Heredoc Delimiter Corruption in Shell Command Wrapping
+- **Observation**: When wrapping shell commands (e.g., to capture environment variables and CWD transitions) using semicolon delimiters, trailing comments or multi-line here-document blocks (heredocs) are corrupted because the wrapper suffix (e.g. `; _exit=$?`) is appended on the same line as the heredoc delimiter (e.g., `EOS`).
+- **Learning**: Wrapping shell commands must be done using newline (`\n`) delimiters instead of semicolons. This cleanly separates the command block and ensures line-oriented constructs like heredocs and comments terminate before the exit code verification runs.
+
+## 101. Auto-Normalization of Tool Registry Schemas
+- **Observation**: Specifying flat schemas or manually wrapped schemas dynamically at request time makes validation complex and prone to dynamic key mapping bugs.
+- **Learning**: Enforce early schema validation and automatic schema wrapping at the moment of tool registration. The registry should automatically normalize flat definitions to the nested function format and validate that the nested function name matches the registered tool key.
+
+## 102. OpenRouter Free-Tier Global Request Quotas
+- **Observation**: Using model IDs ending in `:free` (like `deepseek-v4-flash:free` or `qwen/qwen3-coder:free`) is prone to sudden, severe 429 rate-limit errors because OpenRouter applies a strict global daily request limit (e.g., 50/day) on accounts that have not deposited credits.
+- **Learning**: For stable benchmark execution, query paid models (like `deepseek/deepseek-v4-flash` and `qwen/qwen-2.5-coder-32b-instruct`) instead of `:free` variants. These models are extremely inexpensive and bypass free-tier rate limits completely.
+
+## 103. Containerized IPv6 Network Gateway Hangs
+- **Observation**: On macOS hosts, running Docker bridge networking inside Rosetta emulated environments frequently experiences broken IPv6 routing, causing package managers (`apt-get update`) to hang indefinitely during task setup or validation.
+- **Learning**: Enforce IPv4 usage globally in the container's apt configuration by injecting `Acquire::ForceIPv4 "true";` to `/etc/apt/apt.conf.d/99force-ipv4` at container initialization time.
+
+
