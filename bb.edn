@@ -6,4 +6,9 @@
         :task (do (require '[clojure.test :as t] 'registry-test 'agent-test 'agent-error-test 'config-test 'spec-test 'taste-test 'codedb-test 'skill-extraction-test)
                  (let [res (clojure.test/run-tests 'registry-test 'agent-test 'agent-error-test 'config-test 'spec-test 'taste-test 'codedb-test 'skill-extraction-test)]
                    (when (pos? (+ (:fail res) (:error res)))
-                     (System/exit 1))))}}}
+                     (System/exit 1))))}
+  test-webdriver {:doc "Run WebDriver tests"
+                  :task (do (require '[clojure.test :as t] 'webdriver-test)
+                           (let [res (clojure.test/run-tests 'webdriver-test)]
+                             (when (pos? (+ (:fail res) (:error res)))
+                               (System/exit 1))))}}}

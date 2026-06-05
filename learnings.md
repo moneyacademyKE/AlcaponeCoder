@@ -300,5 +300,6 @@
 - **Observation**: Running tests in Babashka (which uses SCI under the hood) threw `clojure.lang.ArityException: Wrong number of args (1) passed to: sci.impl.fns/fun/arity-2` when a 2-argument function `llm/call-auxiliary-llm` was mocked with a 1-argument anonymous function `(fn [_] ...)`.
 - **Learning**: SCI strictly validates arity during runtime evaluation. In-context mocks using `with-redefs` must exactly match the arity signature of the original function being mocked (even for ignored dummy parameters), otherwise the execution boundaries will reject the call.
 
-
-
+## 105. Stateless W3C HTTP WebDriver Pipelines
+- **Observation**: Browser automation can be completely de-coupled from heavy OOP library wrappers (such as Python's Playwright/Selenium loops) by interacting directly with webdriver binaries (e.g. `chromedriver`) using the standardized W3C WebDriver REST protocol.
+- **Learning**: Implementing a stateless client that communicates via HTTP/JSON POST/GET/DELETE requests allows modeling all browser interactions (navigation, element discovery, clicks, value input) as pure functional data pipelines, reducing runtime complexity and eliminating Python execution dependencies entirely.

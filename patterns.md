@@ -371,3 +371,8 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 **Context**: Free-tier or volatile API provider endpoints frequently encounter rate-limit spikes (429) or transient server errors (500, 404). Relying on simple retry loops can cause benchmark timeouts.
 **Solution**: Implement a structured multi-stage model key hierarchy (`:primary` -> `:fallback` -> `:auxiliary`) in the state map. If a request is retryable but rate-limited or fails after a threshold, transition the active model key to the fallback model in the next loop recursion, auto-healing the agent.
 **Benefit**: Avoids agent loop termination and ensures high success rates during provider outages.
+
+## Pattern 38: Stateless W3C HTTP WebDriver REST Pipeline
+**Context**: Heavy OOP browser libraries (such as Playwright or Selenium wrappers) require spawning stateful background driver managers and tracking side-effects across complex object lifecycles, which complects agentic loops.
+**Solution**: Interact directly with ChromeDriver/GeckoDriver binaries using the standardized, stateless W3C WebDriver HTTP REST protocol. Represent actions (creating sessions, navigation, element query, clicking, typing, and close session) as stateless HTTP client requests (POST/GET/DELETE) where the unique `session-id` is passed explicitly as an argument or URL path variable.
+**Benefit**: Removes all library dependencies, enables purely functional data-in, data-out pipelines, and yields sub-millisecond setup times.
