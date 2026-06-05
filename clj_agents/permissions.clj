@@ -39,7 +39,8 @@
           session-id (:id system)]
       (cond
         (contains? (get approvals session-id) desc) [true nil]
-        (= "true" (System/getenv "HEADLESS"))
+        (or (= "true" (System/getenv "HEADLESS"))
+            (some? (System/getenv "HARBOR_INSTRUCTION")))
         (do (println "[SYSTEM] Headless mode: Auto-approving dangerous command.") [true nil])
         
         :else (let [choice (ask-user command desc)]

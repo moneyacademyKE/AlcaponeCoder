@@ -19,8 +19,9 @@
                                       :name "check-open-ports" 
                                       :description "Check open network ports using netstat" 
                                       :content "Run `netstat -tuln` to see active listening ports."}]})]
-      (with-redefs [llm/call-auxiliary-llm (fn [_] mock-reviewer-response)]
-        (let [extracted-count (reviewer/review-trajectory trajectory)]
+      (with-redefs [llm/call-auxiliary-llm (fn [_ _] mock-reviewer-response)
+                    llm/call-fallback-llm (fn [_ _] "{\"decision\": \"VERIFY\", \"outcome_found\": true, \"reasoning\": \"Looks good\"}")]
+        (let [extracted-count (reviewer/review-trajectory {} trajectory)]
           (is (= 1 extracted-count))
           (let [skills (skill/list-skills :include-drafts true)
                 new-skill (first (filter #(= (:name %) "check-open-ports") (remove nil? skills)))]

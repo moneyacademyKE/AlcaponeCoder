@@ -296,4 +296,9 @@
 - **Observation**: On macOS hosts, running Docker bridge networking inside Rosetta emulated environments frequently experiences broken IPv6 routing, causing package managers (`apt-get update`) to hang indefinitely during task setup or validation.
 - **Learning**: Enforce IPv4 usage globally in the container's apt configuration by injecting `Acquire::ForceIPv4 "true";` to `/etc/apt/apt.conf.d/99force-ipv4` at container initialization time.
 
+## 104. Arity-safe Redefinition Mocking in SCI Environments
+- **Observation**: Running tests in Babashka (which uses SCI under the hood) threw `clojure.lang.ArityException: Wrong number of args (1) passed to: sci.impl.fns/fun/arity-2` when a 2-argument function `llm/call-auxiliary-llm` was mocked with a 1-argument anonymous function `(fn [_] ...)`.
+- **Learning**: SCI strictly validates arity during runtime evaluation. In-context mocks using `with-redefs` must exactly match the arity signature of the original function being mocked (even for ignored dummy parameters), otherwise the execution boundaries will reject the call.
+
+
 

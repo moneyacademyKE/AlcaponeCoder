@@ -362,10 +362,12 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 **Solution**: Inject `Acquire::ForceIPv4 "true";` into the container's `/etc/apt/apt.conf.d/99force-ipv4` immediately at setup time.
 **Benefit**: Prevents container network hangs across all subsequent setup and verification tasks.
 
+## Pattern 36: Arity-Safe Mocking in Interpreter Sandboxes
+**Context**: Dynamic mocking libraries (e.g., using `with-redefs` in Babashka/SCI) often fail with runtime `ArityException` if the mock function signature does not match the exact number of parameters expected by the runtime interpreter.
+**Solution**: Ensure that all anonymous or mock functions declared in test namespaces explicitly replicate the parameter count (arity) of the target production functions, even if some parameters are ignored (e.g., using `_` or `_args`).
+**Benefit**: Prevents test execution failures under Sandboxed Clojure Interpreter (SCI) boundaries.
 
-
-
-
-
-
-
+## Pattern 37: Multi-Stage Recovery & Rate-Limit Fallbacks
+**Context**: Free-tier or volatile API provider endpoints frequently encounter rate-limit spikes (429) or transient server errors (500, 404). Relying on simple retry loops can cause benchmark timeouts.
+**Solution**: Implement a structured multi-stage model key hierarchy (`:primary` -> `:fallback` -> `:auxiliary`) in the state map. If a request is retryable but rate-limited or fails after a threshold, transition the active model key to the fallback model in the next loop recursion, auto-healing the agent.
+**Benefit**: Avoids agent loop termination and ensures high success rates during provider outages.

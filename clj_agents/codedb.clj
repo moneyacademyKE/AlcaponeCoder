@@ -361,44 +361,51 @@
       (registry/register {:name "codedb_tree"
                           :handler codedb-tree-tool
                           :schema {:type "function"
-                                   :description "Compact workspace directory structure with file sizes."
-                                   :parameters {:type "object"
-                                                 :properties {:root-dir {:type "string" :description "Root directory path."}}
-                                                 :required []}}})
+                                   :function {:name "codedb_tree"
+                                              :description "Compact workspace directory structure with file sizes."
+                                              :parameters {:type "object"
+                                                           :properties {:root-dir {:type "string" :description "Root directory path."}}
+                                                           :required []}}}})
       (registry/register {:name "codedb_hot"
                           :handler codedb-hot-tool
                           :schema {:type "function"
-                                   :description "Git status and recently modified files list."
-                                   :parameters {:type "object"
-                                                 :properties {:root-dir {:type "string" :description "Root directory path."}}
-                                                 :required []}}})
+                                   :function {:name "codedb_hot"
+                                              :description "Git status and recently modified files list."
+                                              :parameters {:type "object"
+                                                           :properties {:root-dir {:type "string" :description "Root directory path."}}
+                                                           :required []}}}})
       (registry/register {:name "codedb_outline"
                           :handler codedb-outline-tool
                           :schema {:type "function"
-                                   :description "Outline file functions, classes, and variables."
-                                   :parameters {:type "object"
-                                                 :properties {:path {:type "string" :description "File path."}}
-                                                 :required ["path"]}}})
+                                   :function {:name "codedb_outline"
+                                              :description "Outline file functions, classes, and variables."
+                                              :parameters {:type "object"
+                                                           :properties {:path {:type "string" :description "File path."}}
+                                                           :required ["path"]}}}})
       (registry/register {:name "codedb_search"
                           :handler codedb-search-tool
                           :schema {:type "function"
-                                   :description "Workspace text search."
-                                   :parameters {:type "object"
-                                                 :properties {:query {:type "string" :description "Search query."}
-                                                              :root-dir {:type "string" :description "Root directory path."}}
-                                                 :required ["query"]}}})
+                                   :function {:name "codedb_search"
+                                              :description "Workspace text search."
+                                              :parameters {:type "object"
+                                                           :properties {:query {:type "string" :description "Search query."}
+                                                                        :root-dir {:type "string" :description "Root directory path."}}
+                                                           :required ["query"]}}}})
       (registry/register {:name "codedb_deps"
                           :handler codedb-deps-tool
                           :schema {:type "function"
-                                   :description "Workspace dependency relations."
-                                   :parameters {:type "object"
-                                                 :properties {:root-dir {:type "string" :description "Root directory path."}}
-                                                 :required []}}})
+                                   :function {:name "codedb_deps"
+                                              :description "Workspace dependency relations."
+                                              :parameters {:type "object"
+                                                           :properties {:root-dir {:type "string" :description "Root directory path."}}
+                                                           :required []}}}})
       (registry/register {:name "codedb_context"
                           :handler codedb-context-tool
                           :schema {:type "function"
-                                   :description "Fuses search, outline, symbol, and callers into a single ranked context response."
-                                   :parameters {:type "object"
-                                                 :properties {:query {:type "string" :description "The natural-language task query."}
-                                                              :root-dir {:type "string" :description "Root directory path."}}
-                                                 :required ["query"]}}})))
+                                   :function {:name "codedb_context"
+                                              :description "Fuses search, outline, symbol, and callers into a single ranked context response."
+                                              :parameters {:type "object"
+                                                           :properties {:query {:type "string" :description "The natural-language task query."}
+                                                                        :root-dir {:type "string" :description "Root directory path."}}
+                                                           :required ["query"]}}}})
+      ))

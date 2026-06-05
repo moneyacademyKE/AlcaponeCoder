@@ -118,15 +118,17 @@
                   (recur (compression/compress messages {:protect-first 1 :tail-char-budget 5000 :call-llm-fn (partial llm/call-auxiliary-llm current-system)})
                          iteration 0 0 current-system)
                   
-                  (and (:should-fallback classified) (= active-model-key :primary))
-                  (let [new-system (assoc current-system :active-model-key :fallback)]
-                    (logger/warn current-system :auto_heal {:target :fallback :reason (:reason classified) :message (:message response)})
+                  (and (:should-fallback classified) (not= active-model-key :auxiliary))
+                  (let [next-key (if (= active-model-key :primary) :fallback :auxiliary)
+                        new-system (assoc current-system :active-model-key next-key)]
+                    (logger/warn current-system :auto_heal {:target next-key :reason (:reason classified) :message (:message response)})
                     (recur messages iteration 0 0 new-system))
 
                   (and (:retryable classified) (< retry-count 10))
-                  (if (and (= (:reason classified) :rate-limit) (>= retry-count 3) (= active-model-key :primary))
-                    (let [new-system (assoc current-system :active-model-key :fallback)]
-                      (logger/warn current-system :auto_heal {:target :fallback :reason "Excessive rate limits"})
+                  (if (and (contains? #{:rate-limit :server-error} (:reason classified)) (>= retry-count 1) (not= active-model-key :auxiliary))
+                    (let [next-key (if (= active-model-key :primary) :fallback :auxiliary)
+                          new-system (assoc current-system :active-model-key next-key)]
+                      (logger/warn current-system :auto_heal {:target next-key :reason (str "Excessive " (name (:reason classified)))})
                       (recur messages iteration 0 0 new-system))
                     (do (logger/warn current-system :api_retry {:attempt (inc retry-count) :reason (:reason classified)})
                         (Thread/sleep (long (recovery/jittered-backoff (inc retry-count))))
