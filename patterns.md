@@ -376,3 +376,9 @@ Separate the execution of tasks from the meta-analysis of the methodology. Use a
 **Context**: Heavy OOP browser libraries (such as Playwright or Selenium wrappers) require spawning stateful background driver managers and tracking side-effects across complex object lifecycles, which complects agentic loops.
 **Solution**: Interact directly with ChromeDriver/GeckoDriver binaries using the standardized, stateless W3C WebDriver HTTP REST protocol. Represent actions (creating sessions, navigation, element query, clicking, typing, and close session) as stateless HTTP client requests (POST/GET/DELETE) where the unique `session-id` is passed explicitly as an argument or URL path variable.
 **Benefit**: Removes all library dependencies, enables purely functional data-in, data-out pipelines, and yields sub-millisecond setup times.
+
+## Pattern 39: Out-of-Process Task Sandboxing via Socket-Serialized JSON-RPC
+**Context**: Running execution sandboxes, shell commands, and dynamic scripts within the main state/concurrency VM complects execution boundaries, risking process crashes or heap corruption due to resource leaks.
+**Solution**: Decouple the state/concurrency engine (using Erlang/OTP lightweight actors) from the shell execution sandbox (using a separate Babashka sidecar process). Communicate strictly via JSON-RPC over Unix Domain Sockets (UDS), where execution tasks are serialized, sent to the worker, and results/errors are returned as pure values.
+**Benefit**: Guarantees monolithic crash protection, keeps the supervisor VM clean, and maintains strict structural simplicity.
+

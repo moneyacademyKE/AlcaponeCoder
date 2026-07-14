@@ -303,3 +303,8 @@
 ## 105. Stateless W3C HTTP WebDriver Pipelines
 - **Observation**: Browser automation can be completely de-coupled from heavy OOP library wrappers (such as Python's Playwright/Selenium loops) by interacting directly with webdriver binaries (e.g. `chromedriver`) using the standardized W3C WebDriver REST protocol.
 - **Learning**: Implementing a stateless client that communicates via HTTP/JSON POST/GET/DELETE requests allows modeling all browser interactions (navigation, element discovery, clicks, value input) as pure functional data pipelines, reducing runtime complexity and eliminating Python execution dependencies entirely.
+
+## 106. System-Level De-complecting (Gleam/BEAM Hybrid vs. Pure Babashka)
+- **Observation**: Compiling a comprehensive gap analysis of a pure-interpreted Clojure/Babashka agent loop (`xharness`) against a supervised compiled hybrid Gleam/BEAM runtime (`hermes_beam`) highlights how Erlang/OTP principles (de-coupling identity from state, supervision trees, out-of-process workers via Unix Domain Sockets) realize Rich Hickey's "Simple Made Easy" principles at the system infrastructure level.
+- **Learning**: While a pure Clojure loop is "easier" to construct and debug interactively, it complects OS execution with agent state. A hybrid system remains structurally "simple" by enforcing a clean, socket-serialized process boundary.
+
