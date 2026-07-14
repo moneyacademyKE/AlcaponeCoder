@@ -3,8 +3,8 @@
   {harbor {:doc "Run Harbor Benchmark"
            :task (shell "bb clj_agents/harbor.clj")}
   test {:doc "Run tests"
-        :task (do (require '[clojure.test :as t] 'registry-test 'agent-test 'agent-error-test 'config-test 'spec-test 'taste-test 'codedb-test 'skill-extraction-test)
-                 (let [res (clojure.test/run-tests 'registry-test 'agent-test 'agent-error-test 'config-test 'spec-test 'taste-test 'codedb-test 'skill-extraction-test)]
+        :task (do (require '[clojure.test :as t] 'registry-test 'agent-test 'agent-error-test 'config-test 'spec-test 'taste-test 'codedb-test 'skill-extraction-test 'store-test)
+                 (let [res (clojure.test/run-tests 'registry-test 'agent-test 'agent-error-test 'config-test 'spec-test 'taste-test 'codedb-test 'skill-extraction-test 'store-test)]
                    (when (pos? (+ (:fail res) (:error res)))
                      (System/exit 1))))}
   test-webdriver {:doc "Run WebDriver tests"

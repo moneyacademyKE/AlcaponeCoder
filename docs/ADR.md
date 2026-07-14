@@ -25,3 +25,12 @@ This document records the architectural decisions made during the evolution of t
 - **Context**: The Erlang BEAM implementation (`ayncoder` / `hermes_beam`) provides process isolation but introduces compilation complexity, Erlang toolchain dependency, and cross-runtime socket serialization overhead.
 - **Decision**: Maintain a pure Clojure/Babashka runtime (`xharness`) for developer onboarding simplicity and fast startup (~20ms). Rely on the pure system map and in-process thread pools (`pmap`) for concurrent tasks, while keeping the architecture aligned with Rich Hickey's "Simple Made Easy" philosophy.
 - **Consequences**: Low operational footprint, zero-compilation startup, but lacks the native supervisor process isolation of Erlang/OTP.
+
+---
+
+## ADR 4: Transition to SQLite EAV Datoms Log for state storage
+- **Status**: Implemented (July 2026)
+- **Context**: Storing session history, cron jobs, and skill stats in multiple flat JSON files (`state.json`, `jobs.json`, `stats.json`) leads to race conditions under parallel tool execution and risk of file corruption or drift.
+- **Decision**: Transition state storage to a unified append-only SQLite database (`~/.hermes/state.db`) using the Entity-Attribute-Value (EAV) Datoms model. Use the standard system `sqlite3` CLI tool to run queries and format results as JSON dynamically, keeping the runtime dependency-free.
+- **Consequences**: Consolidates state files, ensures ACID transactions, and aligns the Clojure/Babashka port's data model with the primary Erlang BEAM runtime.
+
